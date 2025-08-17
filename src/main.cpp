@@ -14,12 +14,12 @@ pros::Motor debug(11);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
 // drivetrain settings
-lemlib::Drivetrain drivetrain(&left_motor_group,        // left motor group
-                              &right_motor_group,       // right motor group
-                              10,                       // 10 inch track width
+lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
+                              &right_motor_group,         // right motor group
+                              10,                         // 10 inch track width
                               lemlib::Omniwheel::NEW_275, // using new 4" omnis
-                              180,                      // drivetrain rpm
-                              2                         // horizontal drift
+                              180,                        // drivetrain rpm
+                              2                           // horizontal drift
 );
 
 // imu
@@ -51,9 +51,22 @@ lemlib::ControllerSettings lateral_controller(10, 0, 3, 3, 1, 100, 3, 500, 20);
 // angular PID controller
 lemlib::ControllerSettings angular_controller(2, 0, 10, 0, 0, 0, 0, 0, 0);
 
-// chassis
+lemlib::ExpoDriveCurve
+    throttle_curve(3,    // joystick deadband out of 127
+                   10,   // minimum output where drivetrain will move out of 127
+                   1.019 // expo curve gain
+    );
+
+// input curve for steer input during driver control
+lemlib::ExpoDriveCurve
+    steer_curve(3,    // joystick deadband out of 127
+                10,   // minimum output where drivetrain will move out of 127
+                1.019 // expo curve gain
+    );
+
+// create the chassis
 lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
-                        sensors);
+                        sensors, &throttle_curve, &steer_curve);
 
 void initialize() {
   pros::lcd::initialize();
