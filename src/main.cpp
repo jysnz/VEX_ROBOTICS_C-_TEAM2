@@ -17,8 +17,8 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 lemlib::Drivetrain drivetrain(&left_motor_group,        // left motor group
                               &right_motor_group,       // right motor group
                               10,                       // 10 inch track width
-                              lemlib::Omniwheel::NEW_4, // using new 4" omnis
-                              360,                      // drivetrain rpm
+                              lemlib::Omniwheel::NEW_275, // using new 4" omnis
+                              180,                      // drivetrain rpm
                               2                         // horizontal drift
 );
 
@@ -69,72 +69,26 @@ void initialize() {
 }
 
 void opcontrol() {
-  int speed = 0;
-  int rampCounter = 0;
-
   while (true) {
-    // buttons for forward/backward
-    bool r1 =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1); // drive forward
-    bool r2 =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2); // drive reverse
-
     // conveyor buttons
     bool convForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
     bool convReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
-    bool debugM = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-    // analog stick for turning
-    int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X);
 
-    // --- Forward/Reverse speed logic ---
-    if (r1 && r2) {
-      speed = 0;
-      rampCounter = 0;
-    } else if (r1) {
-      rampCounter++;
-      speed += (1 + rampCounter / 10);
-    } else if (r2) {
-      rampCounter++;
-      speed -= (1 + rampCounter / 10);
-    } else {
-      rampCounter = 0;
-      if (speed > 0)
-        speed -= 1;
-      else if (speed < 0)
-        speed += 1;
-    }
+    // joystick values
+    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+    int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
-    // limit speed range
-    if (speed > 127)
-      speed = 127;
-    if (speed < -127)
-      speed = -127;
+    // combine forward/back + turning
+    int leftMotorSpeed = move + turn;
+    int rightMotorSpeed = move - turn;
 
-    // --- Combine forward/backward with turning ---
-    int leftMotorSpeed = speed + turn;  // turn adds differential
-    int rightMotorSpeed = speed - turn; // turn subtracts differential
-
-    // clip values
-    if (leftMotorSpeed > 127)
-      leftMotorSpeed = 127;
-    if (leftMotorSpeed < -127)
-      leftMotorSpeed = -127;
-    if (rightMotorSpeed > 127)
-      rightMotorSpeed = 127;
-    if (rightMotorSpeed < -127)
-      rightMotorSpeed = -127;
+    // clamp values so they don’t exceed -127 to 127
+    leftMotorSpeed = std::clamp(leftMotorSpeed, -127, 127);
+    rightMotorSpeed = std::clamp(rightMotorSpeed, -127, 127);
 
     // drive motors
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
-
-    if (turn) {
-      // turn motors
-      left_motor_group.move(leftMotorSpeed);
-      right_motor_group.move(rightMotorSpeed);
-    } else {
-      // straight motors    
-    }
 
     // conveyor motors
     if (convForward) {
@@ -145,13 +99,7 @@ void opcontrol() {
       conveyor.move(0);
     }
 
-    if (debugM) {
-      debug.move(127);
-    } else {
-      debug.move(0);
-    }
-
-    pros::delay(20);
+    pros::delay(20); // loop delay
   }
 }
 
