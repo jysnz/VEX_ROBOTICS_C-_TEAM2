@@ -1,6 +1,17 @@
 #include "main.h"
 #include "lemlib/api.hpp"
 #include "pros/misc.h"
+#include "pros/motors.hpp"
+#include "pros/rtos.hpp"
+#include <cmath>
+
+// --- Robot state ---
+double x = 0.0, y = 0.0, theta = 0.0;
+
+// --- Constants ---
+const double wheelDiameter = 2.7; // inches
+const double trackWidth = 12.0;   // distance between wheels
+const double ticksPerRev = 360.0; // depends on encoder resolution
 
 // left motor group
 // left side: 7 and 6
@@ -68,14 +79,62 @@ lemlib::ExpoDriveCurve
 lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
                         sensors, &throttle_curve, &steer_curve);
 
+double prevLeft = 0.0;
+double prevRight = 0.0;
+
+void updateOdometry() {
+  // Get current encoder positions (degrees)
+  double leftDeg = left_motor_group.get_position();
+  double rightDeg = right_motor_group.get_position();
+
+  // Convert to "ticks"
+  double leftTicks = (leftDeg / 360.0) * ticksPerRev;
+  double rightTicks = (rightDeg / 360.0) * ticksPerRev;
+
+  // Delta ticks
+  double deltaLeftTicks = leftTicks - prevLeft;
+  double deltaRightTicks = rightTicks - prevRight;
+
+  prevLeft = leftTicks;
+  prevRight = rightTicks;
+
+  // Convert ticks → distance
+  double distPerTick = (M_PI * wheelDiameter) / ticksPerRev;
+  double dL = deltaLeftTicks * distPerTick;
+  double dR = deltaRightTicks * distPerTick;
+
+  // Kinematics
+  double dTheta = (dR - dL) / trackWidth;
+  double dS = (dR + dL) / 2.0;
+
+  // Update global pose
+  x += dS * cos(theta + dTheta / 2.0);
+  y += dS * sin(theta + dTheta / 2.0);
+  theta += dTheta;
+}
+
+void odometryTask() {
+  // Reset encoders
+  left_motor_group.tare_position();
+  right_motor_group.tare_position();
+  prevLeft = 0;
+  prevRight = 0;
+
+  while (true) {
+    updateOdometry();
+    pros::delay(10); // update every 10ms
+  }
+}
+
 void initialize() {
   pros::lcd::initialize();
   chassis.calibrate();
+  pros::Task odoTask(odometryTask);
   pros::Task screen_task([&]() {
     while (true) {
-      pros::lcd::print(0, "X: %f", chassis.getPose().x);
-      pros::lcd::print(1, "Y: %f", chassis.getPose().y);
-      pros::lcd::print(2, "Theta: %f", chassis.getPose().theta);
+      pros::lcd::print(0, "X: %.2f", x);
+      pros::lcd::print(1, "Y: %.2f", y);
+      pros::lcd::print(2, "Theta: %.2f", theta);
       pros::delay(20);
     }
   });
