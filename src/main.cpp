@@ -9,17 +9,17 @@
 double x = 0.0, y = 0.0, theta = 0.0;
 
 // --- Constants ---
-const double wheelDiameter = 2.7; // inches
+const double wheelDiameter = 2.75; // inches
 const double trackWidth = 12.0;   // distance between wheels
 const double ticksPerRev = 360.0; // depends on encoder resolution
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-18, -17}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({13, 14}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-9, -10}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({1, 2}, pros::MotorGears::green);
 
 // conveyor motors
-pros::MotorGroup conveyor({1, -2}, pros::MotorGears::red);
+pros::MotorGroup conveyor({20, -19}, pros::MotorGears::red);
 pros::Motor debug(11);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
@@ -29,8 +29,8 @@ lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
                               &right_motor_group,         // right motor group
                               10,                         // 10 inch track width
                               lemlib::Omniwheel::NEW_275, // using new 4" omnis
-                              180,                        // drivetrain rpm
-                              2                           // horizontal drift
+                              300,                        // drivetrain rpm
+                              1                         // horizontal drift
 );
 
 // imu
@@ -147,8 +147,8 @@ void opcontrol() {
     bool convReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
 
     // joystick values
-    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-    int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+    int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X);
 
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
