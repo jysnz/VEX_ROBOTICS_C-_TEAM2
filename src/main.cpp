@@ -24,14 +24,17 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-9, -10}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({1, 2}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-1, -13}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({11, 12}, pros::MotorGears::green);
+pros::MotorGroup arm({15, -19}, pros::MotorGears::green);
 
-pros::MotorGroup conveyor({11, 12}, pros::MotorGears::green);
 
-pros::Motor arm(16);
+//pros::MotorGroup conveyor({11, 12}, pros::MotorGears::green);
 
+pros::Motor feeder(2);
+pros::Motor conveyor(16);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
+pros::ADIDigitalOut grabber('A');
 
 // drivetrain settings
 lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
@@ -151,23 +154,22 @@ void initialize() {
 
 void opcontrol() {
   while (true) {
-    // conveyor buttons
-    double turnScale = 0.6;
-    bool conveyorForward =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
-    bool conveyorReverse =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-    bool clutch = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-    // bool armUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
-    // bool armDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
-    bool level1Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
-    bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
-    bool level3Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
+
+    double armPosition = arm.get_position();
+
+    bool intake = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+    bool outtake = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+
+    bool armUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+    bool armDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+
+    bool grabberOpen = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
+    bool grabberClose = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
 
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
-        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
+        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X);
 
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
@@ -181,94 +183,45 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
 
-    if (clutch) {
-      if (leftMotorSpeed < 0 && rightMotorSpeed < 0) {
-        left_motor_group.move_velocity(leftMotorSpeed / 2);
-        right_motor_group.move_velocity(rightMotorSpeed / 2);
-      } else {
-        left_motor_group.move_velocity(leftMotorSpeed / 1.5);
-        right_motor_group.move_velocity(rightMotorSpeed / 1.5);
-      }
-    } else {
-      left_motor_group.move_velocity(leftMotorSpeed);
-      right_motor_group.move_velocity(rightMotorSpeed);
-    }
-
-    // Debug arm position control: level buttons map to preset angles (deg).
-    // Pressing level1Arm -> 0°, level2Arm -> 45°, level3Arm -> 90°.
-    {
-      // Position targets
-      double targetAngle = 0.0;
-      bool haveTarget = false;
-      if (level1Arm) {
-        targetAngle = 0.0;
-        haveTarget = true;
-      } else if (level2Arm) {
-        targetAngle = 45.0;
-        haveTarget = true;
-      } else if (level3Arm) {
-        targetAngle = 90.0;
-        haveTarget = true;
-      }
-
-      // Read current angle from the arm motor (degrees)
-      double angleDeg = arm.get_position();
-
-      // Compute raw velocity target using a simple P-controller when a target
-      // is set
-      int rawTarget = 0;
-      if (haveTarget) {
-        const double POS_KP = 8.0; // proportional gain (tune this)
-        double error = targetAngle - angleDeg;
-        double vel = POS_KP * error;
-        // clamp to max vel
-        if (vel > ARM_MAX_VEL)
-          vel = ARM_MAX_VEL;
-        if (vel < -ARM_MAX_VEL)
-          vel = -ARM_MAX_VEL;
-        rawTarget = static_cast<int>(vel);
-      } else {
-        rawTarget = 0; // no target -> hold
-      }
-
-      // Determine allowed target after angle checks (hard limits + safety
-      // margin)
-      double allowedTarget = rawTarget;
-      if (rawTarget > 0 && angleDeg >= ARM_MAX_ANGLE) {
-        allowedTarget = 0; // at/over positive limit
-      } else if (rawTarget < 0 && angleDeg <= ARM_MIN_ANGLE) {
-        allowedTarget = 0; // at/under negative limit
-      } else if (rawTarget > 0 &&
-                 angleDeg > (ARM_MAX_ANGLE - ARM_SAFETY_MARGIN)) {
-        double factor =
-            std::max(0.0, (ARM_MAX_ANGLE - angleDeg) / ARM_SAFETY_MARGIN);
-        allowedTarget = static_cast<int>(rawTarget * factor);
-      } else if (rawTarget < 0 &&
-                 angleDeg < (ARM_MIN_ANGLE + ARM_SAFETY_MARGIN)) {
-        double factor =
-            std::max(0.0, (angleDeg - ARM_MIN_ANGLE) / ARM_SAFETY_MARGIN);
-        allowedTarget = static_cast<int>(rawTarget * factor);
-      }
-
-      // Ramp (limit acceleration)
-      static int currentDebugVel = 0; // persists across loop iterations
-      int delta = static_cast<int>(allowedTarget) - currentDebugVel;
-      if (delta > ARM_ACCEL_STEP)
-        delta = ARM_ACCEL_STEP;
-      if (delta < -ARM_ACCEL_STEP)
-        delta = -ARM_ACCEL_STEP;
-      currentDebugVel += delta;
-
-      // Apply to arm motor
-      arm.move_velocity(currentDebugVel);
-    }
-
-    if (conveyorForward && !conveyorReverse) {
-      conveyor.move_velocity(200);
-    } else if (conveyorReverse && !conveyorForward) {
+    if (intake) {
+      feeder.move_velocity(200);
       conveyor.move_velocity(-200);
+    } else if (outtake) {
+      feeder.move_velocity(-200);
+      conveyor.move_velocity(200);
     } else {
+      feeder.move_velocity(0);
       conveyor.move_velocity(0);
+    }
+
+    if (armUp && !armDown) {
+      arm.move_velocity(200);
+    } else if (armDown && !armUp) {
+      arm.move_velocity(-200);
+    } else {
+      arm.move_velocity(0);
+    }
+
+    if (armPosition < ARM_MIN_ANGLE + ARM_SAFETY_MARGIN) {
+      // near minimum angle, scale down downward velocity
+      if (armDown) {
+        double scale =
+            (armPosition - ARM_MIN_ANGLE) / ARM_SAFETY_MARGIN; // 0 to 1
+        arm.move_velocity(-200 * scale);
+      }
+    } else if (armPosition > ARM_MAX_ANGLE - ARM_SAFETY_MARGIN) {
+      // near maximum angle, scale down upward velocity
+      if (armUp) {
+        double scale =
+            (ARM_MAX_ANGLE - armPosition) / ARM_SAFETY_MARGIN; // 0 to 1
+        arm.move_velocity(200 * scale);
+      }
+    }
+
+    if (grabberOpen && !grabberClose) {
+      grabber.set_value(true);
+    } else if (grabberClose && !grabberOpen) {
+      grabber.set_value(false);
     }
 
     // conveyor motors
