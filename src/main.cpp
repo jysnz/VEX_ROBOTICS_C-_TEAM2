@@ -34,7 +34,7 @@ pros::MotorGroup arm({15, -19}, pros::MotorGears::green);
 pros::Motor feeder(2);
 pros::Motor conveyor(16);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
-pros::ADIDigitalOut grabber('A');
+pros::adi::DigitalOut grabber('A');
 
 // drivetrain settings
 lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
@@ -154,7 +154,6 @@ void initialize() {
 
 void opcontrol() {
   while (true) {
-
     double armPosition = arm.get_position();
 
     bool intake = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
@@ -167,9 +166,9 @@ void opcontrol() {
     bool grabberClose = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
 
     // joystick values
-    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+    int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
-        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X);
+        -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X);
 
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
@@ -202,25 +201,9 @@ void opcontrol() {
       arm.move_velocity(0);
     }
 
-    if (armPosition < ARM_MIN_ANGLE + ARM_SAFETY_MARGIN) {
-      // near minimum angle, scale down downward velocity
-      if (armDown) {
-        double scale =
-            (armPosition - ARM_MIN_ANGLE) / ARM_SAFETY_MARGIN; // 0 to 1
-        arm.move_velocity(-200 * scale);
-      }
-    } else if (armPosition > ARM_MAX_ANGLE - ARM_SAFETY_MARGIN) {
-      // near maximum angle, scale down upward velocity
-      if (armUp) {
-        double scale =
-            (ARM_MAX_ANGLE - armPosition) / ARM_SAFETY_MARGIN; // 0 to 1
-        arm.move_velocity(200 * scale);
-      }
-    }
-
-    if (grabberOpen && !grabberClose) {
+    if (grabberOpen) {
       grabber.set_value(true);
-    } else if (grabberClose && !grabberOpen) {
+    } else if (grabberClose) {
       grabber.set_value(false);
     }
 
