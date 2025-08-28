@@ -16,10 +16,9 @@ const double ticksPerRev = 360.0;  // depends on encoder resolution
 
 // --- Debug motor limits (degrees and velocity) ---
 const int ARM_MAX_VEL = 600;       // maximum motor velocity for debug motor
-const double ARM_MIN_ANGLE = 0.0;  // minimum allowed angle (degrees)
-const double ARM_MAX_ANGLE = 90.0; // maximum allowed angle (degrees)
-const double ARM_SAFETY_MARGIN =
-    15.0;                      // degrees within limit to start scaling down
+const double ARM_MIN_ANGLE = 10.0;  // minimum allowed angle (degrees)
+const double ARM_MAX_ANGLE = 90.0;  // maximum allowed angle (degrees)
+const double ARM_SAFETY_MARGIN = 10.0; // degrees within limit to start scaling down
 const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
