@@ -27,9 +27,10 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 pros::MotorGroup left_motor_group({-9, -10}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({1, 2}, pros::MotorGears::green);
 
-pros::MotorGroup conveyor({11, 12}, pros::MotorGears::green);
+pros::Motor conveyor(15);
 
-pros::Motor arm(16);
+pros::Motor arm1(16);
+pros::Motor arm2(17);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -149,20 +150,35 @@ void initialize() {
   });
 }
 
+void moveArm1ToAngle(double angle, int velocity = 100) {
+    arm1.move_absolute(angle, velocity);
+}
+
+void moveArm2ToAngle(double angle, int velocity = 100) {
+    arm2.move_absolute(angle, velocity);
+}
+
 void opcontrol() {
   while (true) {
     // conveyor buttons
+
+    double Arm1Position = arm1.get_position();
+    double Arm2Position = arm2.get_position();
+
     double turnScale = 0.6;
     bool conveyorForward =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
     bool conveyorReverse =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
     bool clutch = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-    // bool armUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
-    // bool armDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
+
     bool level1Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
     bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
     bool level3Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
+
+    bool level1Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
+    bool level2Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_LEFT);
+    bool level3Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
 
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
@@ -194,73 +210,26 @@ void opcontrol() {
       right_motor_group.move_velocity(rightMotorSpeed);
     }
 
-    // Debug arm position control: level buttons map to preset angles (deg).
-    // Pressing level1Arm -> 0°, level2Arm -> 45°, level3Arm -> 90°.
-    {
-      // Position targets
-      double targetAngle = 0.0;
-      bool haveTarget = false;
-      if (level1Arm) {
-        targetAngle = 0.0;
-        haveTarget = true;
-      } else if (level2Arm) {
-        targetAngle = 45.0;
-        haveTarget = true;
-      } else if (level3Arm) {
-        targetAngle = 90.0;
-        haveTarget = true;
-      }
+    //Angle of the arm
 
-      // Read current angle from the arm motor (degrees)
-      double angleDeg = arm.get_position();
+    if(level1Arm) {
+        moveArm1ToAngle(0, ARM_MAX_VEL);
+    } else if(level2Arm) {
+        moveArm1ToAngle(45, ARM_MAX_VEL);
+    } else if(level3Arm) {
+        moveArm1ToAngle(90, ARM_MAX_VEL);
+    } else {
+        moveArm1ToAngle(Arm1Position, 0);
+    }
 
-      // Compute raw velocity target using a simple P-controller when a target
-      // is set
-      int rawTarget = 0;
-      if (haveTarget) {
-        const double POS_KP = 8.0; // proportional gain (tune this)
-        double error = targetAngle - angleDeg;
-        double vel = POS_KP * error;
-        // clamp to max vel
-        if (vel > ARM_MAX_VEL)
-          vel = ARM_MAX_VEL;
-        if (vel < -ARM_MAX_VEL)
-          vel = -ARM_MAX_VEL;
-        rawTarget = static_cast<int>(vel);
-      } else {
-        rawTarget = 0; // no target -> hold
-      }
-
-      // Determine allowed target after angle checks (hard limits + safety
-      // margin)
-      double allowedTarget = rawTarget;
-      if (rawTarget > 0 && angleDeg >= ARM_MAX_ANGLE) {
-        allowedTarget = 0; // at/over positive limit
-      } else if (rawTarget < 0 && angleDeg <= ARM_MIN_ANGLE) {
-        allowedTarget = 0; // at/under negative limit
-      } else if (rawTarget > 0 &&
-                 angleDeg > (ARM_MAX_ANGLE - ARM_SAFETY_MARGIN)) {
-        double factor =
-            std::max(0.0, (ARM_MAX_ANGLE - angleDeg) / ARM_SAFETY_MARGIN);
-        allowedTarget = static_cast<int>(rawTarget * factor);
-      } else if (rawTarget < 0 &&
-                 angleDeg < (ARM_MIN_ANGLE + ARM_SAFETY_MARGIN)) {
-        double factor =
-            std::max(0.0, (angleDeg - ARM_MIN_ANGLE) / ARM_SAFETY_MARGIN);
-        allowedTarget = static_cast<int>(rawTarget * factor);
-      }
-
-      // Ramp (limit acceleration)
-      static int currentDebugVel = 0; // persists across loop iterations
-      int delta = static_cast<int>(allowedTarget) - currentDebugVel;
-      if (delta > ARM_ACCEL_STEP)
-        delta = ARM_ACCEL_STEP;
-      if (delta < -ARM_ACCEL_STEP)
-        delta = -ARM_ACCEL_STEP;
-      currentDebugVel += delta;
-
-      // Apply to arm motor
-      arm.move_velocity(currentDebugVel);
+    if(level1Arm2) {
+        moveArm2ToAngle(0, ARM_MAX_VEL);
+    } else if(level2Arm2) {
+        moveArm2ToAngle(90, ARM_MAX_VEL);
+    } else if(level3Arm2) {
+        moveArm2ToAngle(120, ARM_MAX_VEL);
+    } else {
+        moveArm2ToAngle(Arm2Position, 0);
     }
 
     if (conveyorForward && !conveyorReverse) {
