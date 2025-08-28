@@ -3,7 +3,9 @@
 #include "pros/misc.h"
 #include "pros/motors.hpp"
 #include "pros/rtos.hpp"
+#include <algorithm>
 #include <cmath>
+
 
 ASSET(path_jerryio_txt);
 // --- Robot state ---
@@ -14,27 +16,14 @@ const double wheelDiameter = 3.25; // inches
 const double trackWidth = 12.0;    // distance between wheels
 const double ticksPerRev = 360.0;  // depends on encoder resolution
 
-// --- Debug motor limits (degrees and velocity) ---
-const int ARM_MAX_VEL = 600;       // maximum motor velocity for debug motor
-const double ARM_MIN_ANGLE = 0.0;  // minimum allowed angle (degrees)
-const double ARM_MAX_ANGLE = 90.0; // maximum allowed angle (degrees)
-const double ARM_SAFETY_MARGIN =
-    15.0;                      // degrees within limit to start scaling down
-const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
-
-// left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-1, -13}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({11, 12}, pros::MotorGears::green);
-pros::MotorGroup arm({15, -19}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-11, -12}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({14, 13}, pros::MotorGears::green);
 
-
-//pros::MotorGroup conveyor({11, 12}, pros::MotorGears::green);
-
-pros::Motor feeder(2);
-pros::Motor conveyor(16);
+// pros::MotorGroup conveyor({11, 12}, pros::MotorGears::green);
+pros::Motor conveyor(10);
+pros::Motor feeder(9);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
-pros::ADIDigitalOut grabber('A');
 
 // drivetrain settings
 lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
@@ -154,22 +143,19 @@ void initialize() {
 
 void opcontrol() {
   while (true) {
-
-    double armPosition = arm.get_position();
+    double turnScale = 0.6; // steering sensitivity
 
     bool intake = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
     bool outtake = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
 
-    bool armUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-    bool armDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+    // bool grabberOpen = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
+    // bool grabberClose = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
 
-    bool grabberOpen = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
-    bool grabberClose = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
-
-    // joystick values
-    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+    // joystick values (invert so pushing stick forward/left produces
+    // forward/left)
+    int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
-        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X);
+        -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
 
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
@@ -183,45 +169,14 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
 
-    if (intake) {
-      feeder.move_velocity(200);
-      conveyor.move_velocity(-200);
-    } else if (outtake) {
+    if(intake) {
+      conveyor.move_velocity(200);
       feeder.move_velocity(-200);
+    } else if(outtake) {
+      conveyor.move_velocity(-200);
       conveyor.move_velocity(200);
     } else {
-      feeder.move_velocity(0);
       conveyor.move_velocity(0);
-    }
-
-    if (armUp && !armDown) {
-      arm.move_velocity(200);
-    } else if (armDown && !armUp) {
-      arm.move_velocity(-200);
-    } else {
-      arm.move_velocity(0);
-    }
-
-    if (armPosition < ARM_MIN_ANGLE + ARM_SAFETY_MARGIN) {
-      // near minimum angle, scale down downward velocity
-      if (armDown) {
-        double scale =
-            (armPosition - ARM_MIN_ANGLE) / ARM_SAFETY_MARGIN; // 0 to 1
-        arm.move_velocity(-200 * scale);
-      }
-    } else if (armPosition > ARM_MAX_ANGLE - ARM_SAFETY_MARGIN) {
-      // near maximum angle, scale down upward velocity
-      if (armUp) {
-        double scale =
-            (ARM_MAX_ANGLE - armPosition) / ARM_SAFETY_MARGIN; // 0 to 1
-        arm.move_velocity(200 * scale);
-      }
-    }
-
-    if (grabberOpen && !grabberClose) {
-      grabber.set_value(true);
-    } else if (grabberClose && !grabberOpen) {
-      grabber.set_value(false);
     }
 
     // conveyor motors
@@ -232,12 +187,4 @@ void opcontrol() {
 void autonomous() {
   // First path
   chassis.setPose(0, 0, 0);
-  chassis.moveToPoint(23.148, 24.132, 2000);
-  conveyor.move_velocity(200);
-  pros::delay(1000);
-  conveyor.move_velocity(0);
-
-  // Second path
-  chassis.setPose(0, 0, 0);
-  chassis.moveToPoint(6.247, 43.175, 2000);
 }
