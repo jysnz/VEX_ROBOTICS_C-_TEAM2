@@ -184,10 +184,10 @@ void opcontrol() {
 
     if (intake) {
       feeder.move_velocity(200);
-      conveyor.move_velocity(-200);
+      conveyor.move_velocity(200);
     } else if (outtake) {
       feeder.move_velocity(-200);
-      conveyor.move_velocity(200);
+      conveyor.move_velocity(-200);
     } else {
       feeder.move_velocity(0);
       conveyor.move_velocity(0);
