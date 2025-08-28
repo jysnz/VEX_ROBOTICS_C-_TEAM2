@@ -153,9 +153,9 @@ void opcontrol() {
 
     // joystick values (invert so pushing stick forward/left produces
     // forward/left)
-    int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
-        -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
+        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
 
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
@@ -169,14 +169,15 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
 
-    if(intake) {
+    if(intake && !outtake) {
       conveyor.move_velocity(200);
-      feeder.move_velocity(-200);
-    } else if(outtake) {
+      feeder.move_velocity(200);
+    } else if(outtake && !intake) {
       conveyor.move_velocity(-200);
-      conveyor.move_velocity(200);
+      feeder.move_velocity(-200);
     } else {
       conveyor.move_velocity(0);
+      feeder.move_velocity(0);
     }
 
     // conveyor motors
