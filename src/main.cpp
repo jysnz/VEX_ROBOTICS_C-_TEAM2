@@ -9,16 +9,11 @@ ASSET(path_jerryio_txt);
 // --- Robot state ---
 double x = 0.0, y = 0.0, theta = 0.0;
 
-const double ARM1_MIN = 0.0, ARM1_MAX = 90.0;   // arm1 limits
-const double ARM2_MIN = 0.0, ARM2_MAX = 120.0;  // arm2 limits
+const double ARM1_MIN = 0.0;
+const double ARM1_MAX = 180.0;
 
-inline double clampd(double v, double lo, double hi) {
-  return std::max(lo, std::min(hi, v));
-}
-
-// persistent arm targets (in motor degrees)
-static double arm1TargetDeg = 0.0;
-static double arm2TargetDeg = 0.0;
+const double ARM2_MIN = 0.0;
+const double ARM2_MAX = 220.0;
 
 // --- Constants ---
 const double wheelDiameter = 3.25; // inches
@@ -35,14 +30,14 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-19, -20}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({11, 12}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-10, -9}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({5, 8}, pros::MotorGears::green);
 
 pros::Motor conveyor(16);
 pros::Motor conveyor1(15);
 
-pros::Motor arm1(18);
-pros::Motor arm2(17);
+pros::Motor arm1(12);
+pros::Motor arm2(13);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -158,17 +153,8 @@ void moveArm2ToAngle(double angle, int velocity = 100) {
 
 void initialize() {
   pros::lcd::initialize();
-  arm1.set_encoder_units(pros::E_MOTOR_ENCODER_DEGREES);
-  arm2.set_encoder_units(pros::E_MOTOR_ENCODER_DEGREES);
-  arm1.tare_position();
-  arm2.tare_position();
   arm1.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   arm2.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-
-  arm1TargetDeg = 0;
-  arm2TargetDeg = 0;
-  arm1.move_absolute(arm1TargetDeg, ARM_MAX_VEL);
-  arm2.move_absolute(arm2TargetDeg, ARM_MAX_VEL);
   chassis.calibrate();
   pros::Task odoTask(odometryTask);
   pros::Task screen_task([&]() {
@@ -184,8 +170,8 @@ void initialize() {
 void opcontrol() {
   while (true) {
     // conveyor buttons
-    double arm1Angle = 0;
-    double arm2Angle = 0;
+    double arm1PrevSpeed;
+    double arm2PrevSpeed;
 
     double Arm1Position = arm1.get_position();
     double Arm2Position = arm2.get_position();
@@ -225,38 +211,49 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
 
-    // --- ARM PRESETS (button edges not required; holding is fine) ---
-    if (level1Arm)      arm1TargetDeg = 0;
-    else if (level2Arm) arm1TargetDeg = 45;
-    else if (level3Arm) arm1TargetDeg = 90;
+    // helper to clamp velocity
+    auto clampVel = [](int vel) {
+        return std::clamp(vel, -100, 100);
+    };
 
-    if (level1Arm2)      arm2TargetDeg = 0;
-    else if (level2Arm2) arm2TargetDeg = 90;
-    else if (level3Arm2) arm2TargetDeg = 120;
-
-    // clamp to safe ranges
-    arm1TargetDeg = clampd(arm1TargetDeg, ARM1_MIN, ARM1_MAX);
-    arm2TargetDeg = clampd(arm2TargetDeg, ARM2_MIN, ARM2_MAX);
-
-    // command the motors each loop (OK to reissue the same target)
-    arm1.move_absolute(arm1TargetDeg, ARM_MAX_VEL);
-    arm2.move_absolute(arm2TargetDeg, ARM_MAX_VEL);
-
-    if (conveyorForward && !conveyorReverse) {
-      conveyor.move_velocity(200);
-    } else if (conveyorReverse && !conveyorForward) {
-      conveyor.move_velocity(-200);
+    // --- ARM1 VELOCITY CONTROL ---
+    if (level1Arm) {                  // button X → move arm1 down
+        arm1.move_velocity(clampVel(-100));
+    } else if (level2Arm) {           // button A → stop arm1
+        arm1.move_velocity(0);
+    } else if (level3Arm) {           // button B → move arm1 up
+        arm1.move_velocity(clampVel(100));
     } else {
-      conveyor.move_velocity(0);
+        arm1.move_velocity(0);        // no input → stop
     }
 
-    if (conveyorForward1 && !conveyorReverse1) {
-      conveyor1.move_velocity(200);
-    } else if (conveyorReverse && !conveyorForward) {
-      conveyor1.move_velocity(-200);
+    // --- ARM2 VELOCITY CONTROL ---
+    if (level1Arm2) {                 // DOWN → move arm2 down
+        arm2.move_velocity(clampVel(-100));
+    } else if (level2Arm2) {          // LEFT → stop arm2
+        arm2.move_velocity(0);
+    } else if (level3Arm2) {          // UP → move arm2 up
+        arm2.move_velocity(clampVel(50));
     } else {
-      conveyor1.move_velocity(0);
+        arm2.move_velocity(0);        // no input → stop
     }
+
+
+    // if (conveyorForward && !conveyorReverse) {
+    //   conveyor.move_velocity(200);
+    // } else if (conveyorReverse && !conveyorForward) {
+    //   conveyor.move_velocity(-200);
+    // } else {
+    //   conveyor.move_velocity(0);
+    // }
+
+    // if (conveyorForward1 && !conveyorReverse1) {
+    //   conveyor1.move_velocity(200);
+    // } else if (conveyorReverse && !conveyorForward) {
+    //   conveyor1.move_velocity(-200);
+    // } else {
+    //   conveyor1.move_velocity(0);
+    // }
 
     // conveyor motors
     pros::delay(20); // loop delay
