@@ -24,12 +24,13 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-9, -10}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({1, 2}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-19, -20}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({11, 12}, pros::MotorGears::green);
 
-pros::Motor conveyor(15);
+pros::Motor conveyor(16);
+pros::Motor conveyor1(15);
 
-pros::Motor arm1(16);
+pros::Motor arm1(18);
 pros::Motor arm2(17);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
@@ -136,8 +137,18 @@ void odometryTask() {
   }
 }
 
+void moveArm1ToAngle(double angle, int velocity = 100) {
+    arm1.move_absolute(angle, velocity);
+}
+
+void moveArm2ToAngle(double angle, int velocity = 100) {
+    arm2.move_absolute(angle, velocity);
+}
+
 void initialize() {
   pros::lcd::initialize();
+  moveArm1ToAngle(0, ARM_MAX_VEL);
+  moveArm2ToAngle(0, ARM_MAX_VEL);
   chassis.calibrate();
   pros::Task odoTask(odometryTask);
   pros::Task screen_task([&]() {
@@ -150,17 +161,11 @@ void initialize() {
   });
 }
 
-void moveArm1ToAngle(double angle, int velocity = 100) {
-    arm1.move_absolute(angle, velocity);
-}
-
-void moveArm2ToAngle(double angle, int velocity = 100) {
-    arm2.move_absolute(angle, velocity);
-}
-
 void opcontrol() {
   while (true) {
     // conveyor buttons
+    double arm1Angle = 0;
+    double arm2Angle = 0;
 
     double Arm1Position = arm1.get_position();
     double Arm2Position = arm2.get_position();
@@ -170,7 +175,10 @@ void opcontrol() {
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
     bool conveyorReverse =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-    bool clutch = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+    bool conveyorForward1 =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+    bool conveyorReverse1 =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
 
     bool level1Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
     bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
@@ -197,37 +205,53 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
 
-    if (clutch) {
-      if (leftMotorSpeed < 0 && rightMotorSpeed < 0) {
-        left_motor_group.move_velocity(leftMotorSpeed / 2);
-        right_motor_group.move_velocity(rightMotorSpeed / 2);
-      } else {
-        left_motor_group.move_velocity(leftMotorSpeed / 1.5);
-        right_motor_group.move_velocity(rightMotorSpeed / 1.5);
-      }
-    } else {
-      left_motor_group.move_velocity(leftMotorSpeed);
-      right_motor_group.move_velocity(rightMotorSpeed);
-    }
-
     //Angle of the arm
-
     if(level1Arm) {
         moveArm1ToAngle(0, ARM_MAX_VEL);
+        arm1Angle += 0;
+        if(arm1Angle != 0) {
+            moveArm1ToAngle(0, ARM_MAX_VEL);
+            arm1Angle = 0;
+        }
     } else if(level2Arm) {
         moveArm1ToAngle(45, ARM_MAX_VEL);
+        arm1Angle += 45;
+        if(arm1Angle != 45) {
+            moveArm1ToAngle(45, ARM_MAX_VEL);
+            arm1Angle = 45;
+        }
     } else if(level3Arm) {
         moveArm1ToAngle(90, ARM_MAX_VEL);
+        arm1Angle += 90;
+        if(arm1Angle != 90) {  
+            moveArm1ToAngle(90, ARM_MAX_VEL);
+            arm1Angle = 90;
+        }
     } else {
         moveArm1ToAngle(Arm1Position, 0);
     }
 
     if(level1Arm2) {
         moveArm2ToAngle(0, ARM_MAX_VEL);
+        arm2Angle += 0;
+        if(arm2Angle != 0) {
+            moveArm2ToAngle(0, ARM_MAX_VEL);
+            arm2Angle = 0;
+        }
     } else if(level2Arm2) {
         moveArm2ToAngle(90, ARM_MAX_VEL);
+        arm2Angle += 90;
+        if(arm2Angle != 90) {
+            moveArm2ToAngle(90, ARM_MAX_VEL);
+            arm2Angle = 90;
+        }
     } else if(level3Arm2) {
         moveArm2ToAngle(120, ARM_MAX_VEL);
+        arm2Angle += 120;
+        if(arm2Angle != 120) {
+            moveArm2ToAngle(120, ARM_MAX_VEL);
+            arm2Angle = 120;
+        }
     } else {
         moveArm2ToAngle(Arm2Position, 0);
     }
@@ -238,6 +262,14 @@ void opcontrol() {
       conveyor.move_velocity(-200);
     } else {
       conveyor.move_velocity(0);
+    }
+
+    if (conveyorForward1 && !conveyorReverse1) {
+      conveyor1.move_velocity(200);
+    } else if (conveyorReverse && !conveyorForward) {
+      conveyor1.move_velocity(-200);
+    } else {
+      conveyor1.move_velocity(0);
     }
 
     // conveyor motors
