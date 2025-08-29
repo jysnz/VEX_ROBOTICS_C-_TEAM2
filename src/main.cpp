@@ -3,14 +3,16 @@
 #include "pros/misc.h"
 #include "pros/motors.hpp"
 #include "pros/rtos.hpp"
+#include <algorithm>
 #include <cmath>
+
 
 ASSET(path_jerryio_txt);
 // --- Robot state ---
 double x = 0.0, y = 0.0, theta = 0.0;
 
-const double ARM1_MIN = 0.0;
-const double ARM1_MAX = 180.0;
+const double ARM1_MIN = -402;
+const double ARM1_MAX = 0;
 
 const double ARM2_MIN = 0.0;
 const double ARM2_MAX = 220.0;
@@ -144,11 +146,11 @@ void odometryTask() {
 }
 
 void moveArm1ToAngle(double angle, int velocity = 100) {
-    arm1.move_absolute(angle, velocity);
+  arm1.move_absolute(angle, velocity);
 }
 
 void moveArm2ToAngle(double angle, int velocity = 100) {
-    arm2.move_absolute(angle, velocity);
+  arm2.move_absolute(angle, velocity);
 }
 
 void initialize() {
@@ -168,6 +170,14 @@ void initialize() {
 }
 
 void opcontrol() {
+  // previous button states for edge detection (persist across loops)
+  static bool prevLevel1Arm = false;
+  static bool prevLevel2Arm = false;
+  static bool prevLevel3Arm = false;
+  static bool prevLevel1Arm2 = false;
+  static bool prevLevel2Arm2 = false;
+  static bool prevLevel3Arm2 = false;
+
   while (true) {
     // conveyor buttons
     double arm1PrevSpeed;
@@ -190,9 +200,9 @@ void opcontrol() {
     bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
     bool level3Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
 
-    bool level1Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
+    bool level1Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
     bool level2Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_LEFT);
-    bool level3Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
+    bool level3Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
 
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
@@ -212,32 +222,46 @@ void opcontrol() {
     right_motor_group.move(rightMotorSpeed);
 
     // helper to clamp velocity
-    auto clampVel = [](int vel) {
-        return std::clamp(vel, -100, 100);
-    };
+    auto clampVel = [](int vel) { return std::clamp(vel, -100, 100); };
 
-    // --- ARM1 VELOCITY CONTROL ---
-    if (level1Arm) {                  // button X → move arm1 down
-        arm1.move_velocity(clampVel(-100));
-    } else if (level2Arm) {           // button A → stop arm1
-        arm1.move_velocity(0);
-    } else if (level3Arm) {           // button B → move arm1 up
-        arm1.move_velocity(clampVel(100));
-    } else {
-        arm1.move_velocity(0);        // no input → stop
+    // --- ARM1 PRESET POSITION CONTROL (rising-edge taps) ---
+    if (level1Arm && !prevLevel1Arm) {
+      double target = -10; // level1 -> min
+      //target = std::clamp(target, ARM1_MIN, ARM1_MAX);
+      moveArm1ToAngle(target, 150);
+    }
+    if (level2Arm && !prevLevel2Arm) {
+      double target = -1450; // level2 -> mid
+      //target = std::clamp(target, ARM1_MIN, ARM1_MAX);
+      moveArm1ToAngle(target, 150);
+    }
+    if (level3Arm && !prevLevel3Arm) {
+      double target = -2400; // level3 -> max
+      //target = std::clamp(target, ARM1_MIN, ARM1_MAX);
+      moveArm1ToAngle(target, 150);
     }
 
-    // --- ARM2 VELOCITY CONTROL ---
-    if (level1Arm2) {                 // DOWN → move arm2 down
-        arm2.move_velocity(clampVel(-100));
-    } else if (level2Arm2) {          // LEFT → stop arm2
-        arm2.move_velocity(0);
-    } else if (level3Arm2) {          // UP → move arm2 up
-        arm2.move_velocity(clampVel(50));
-    } else {
-        arm2.move_velocity(0);        // no input → stop
+    // --- ARM2 PRESET POSITION CONTROL (rising-edge taps) ---
+    if (level1Arm2 && !prevLevel1Arm2) {
+      double target = 0; // level1 -> min
+      moveArm2ToAngle(target, 150);
+    }
+    if (level2Arm2 && !prevLevel2Arm2) {
+      double target = 1300; // level2 -> mid
+      moveArm2ToAngle(target, 150);
+    }
+    if (level3Arm2 && !prevLevel3Arm2) {
+      double target = 1500; // level3 -> max
+      moveArm2ToAngle(target, 150);
     }
 
+    // update previous button states for next loop
+    prevLevel1Arm = level1Arm;
+    prevLevel2Arm = level2Arm;
+    prevLevel3Arm = level3Arm;
+    prevLevel1Arm2 = level1Arm2;
+    prevLevel2Arm2 = level2Arm2;
+    prevLevel3Arm2 = level3Arm2;
 
     // if (conveyorForward && !conveyorReverse) {
     //   conveyor.move_velocity(200);
