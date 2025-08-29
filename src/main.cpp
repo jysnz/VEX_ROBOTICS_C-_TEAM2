@@ -9,6 +9,17 @@ ASSET(path_jerryio_txt);
 // --- Robot state ---
 double x = 0.0, y = 0.0, theta = 0.0;
 
+const double ARM1_MIN = 0.0, ARM1_MAX = 90.0;   // arm1 limits
+const double ARM2_MIN = 0.0, ARM2_MAX = 120.0;  // arm2 limits
+
+inline double clampd(double v, double lo, double hi) {
+  return std::max(lo, std::min(hi, v));
+}
+
+// persistent arm targets (in motor degrees)
+static double arm1TargetDeg = 0.0;
+static double arm2TargetDeg = 0.0;
+
 // --- Constants ---
 const double wheelDiameter = 3.25; // inches
 const double trackWidth = 12.0;    // distance between wheels
@@ -147,8 +158,17 @@ void moveArm2ToAngle(double angle, int velocity = 100) {
 
 void initialize() {
   pros::lcd::initialize();
-  moveArm1ToAngle(0, ARM_MAX_VEL);
-  moveArm2ToAngle(0, ARM_MAX_VEL);
+  arm1.set_encoder_units(pros::E_MOTOR_ENCODER_DEGREES);
+  arm2.set_encoder_units(pros::E_MOTOR_ENCODER_DEGREES);
+  arm1.tare_position();
+  arm2.tare_position();
+  arm1.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  arm2.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
+  arm1TargetDeg = 0;
+  arm2TargetDeg = 0;
+  arm1.move_absolute(arm1TargetDeg, ARM_MAX_VEL);
+  arm2.move_absolute(arm2TargetDeg, ARM_MAX_VEL);
   chassis.calibrate();
   pros::Task odoTask(odometryTask);
   pros::Task screen_task([&]() {
@@ -205,56 +225,22 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
 
-    //Angle of the arm
-    if(level1Arm) {
-        moveArm1ToAngle(0, ARM_MAX_VEL);
-        arm1Angle += 0;
-        if(arm1Angle != 0) {
-            moveArm1ToAngle(0, ARM_MAX_VEL);
-            arm1Angle = 0;
-        }
-    } else if(level2Arm) {
-        moveArm1ToAngle(45, ARM_MAX_VEL);
-        arm1Angle += 45;
-        if(arm1Angle != 45) {
-            moveArm1ToAngle(45, ARM_MAX_VEL);
-            arm1Angle = 45;
-        }
-    } else if(level3Arm) {
-        moveArm1ToAngle(90, ARM_MAX_VEL);
-        arm1Angle += 90;
-        if(arm1Angle != 90) {  
-            moveArm1ToAngle(90, ARM_MAX_VEL);
-            arm1Angle = 90;
-        }
-    } else {
-        moveArm1ToAngle(Arm1Position, 0);
-    }
+    // --- ARM PRESETS (button edges not required; holding is fine) ---
+    if (level1Arm)      arm1TargetDeg = 0;
+    else if (level2Arm) arm1TargetDeg = 45;
+    else if (level3Arm) arm1TargetDeg = 90;
 
-    if(level1Arm2) {
-        moveArm2ToAngle(0, ARM_MAX_VEL);
-        arm2Angle += 0;
-        if(arm2Angle != 0) {
-            moveArm2ToAngle(0, ARM_MAX_VEL);
-            arm2Angle = 0;
-        }
-    } else if(level2Arm2) {
-        moveArm2ToAngle(90, ARM_MAX_VEL);
-        arm2Angle += 90;
-        if(arm2Angle != 90) {
-            moveArm2ToAngle(90, ARM_MAX_VEL);
-            arm2Angle = 90;
-        }
-    } else if(level3Arm2) {
-        moveArm2ToAngle(120, ARM_MAX_VEL);
-        arm2Angle += 120;
-        if(arm2Angle != 120) {
-            moveArm2ToAngle(120, ARM_MAX_VEL);
-            arm2Angle = 120;
-        }
-    } else {
-        moveArm2ToAngle(Arm2Position, 0);
-    }
+    if (level1Arm2)      arm2TargetDeg = 0;
+    else if (level2Arm2) arm2TargetDeg = 90;
+    else if (level3Arm2) arm2TargetDeg = 120;
+
+    // clamp to safe ranges
+    arm1TargetDeg = clampd(arm1TargetDeg, ARM1_MIN, ARM1_MAX);
+    arm2TargetDeg = clampd(arm2TargetDeg, ARM2_MIN, ARM2_MAX);
+
+    // command the motors each loop (OK to reissue the same target)
+    arm1.move_absolute(arm1TargetDeg, ARM_MAX_VEL);
+    arm2.move_absolute(arm2TargetDeg, ARM_MAX_VEL);
 
     if (conveyorForward && !conveyorReverse) {
       conveyor.move_velocity(200);
