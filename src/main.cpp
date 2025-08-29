@@ -19,6 +19,7 @@ const double ticksPerRev = 360.0;  // depends on encoder resolution
 // left side: 7 and 6
 pros::MotorGroup left_motor_group({-11, -12}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({14, 13}, pros::MotorGears::green);
+pros::adi::DigitalOut grabber('A');
 
 // pros::MotorGroup conveyor({11, 12}, pros::MotorGears::green);
 pros::Motor conveyor(10);
@@ -157,6 +158,9 @@ void opcontrol() {
     int turn =
         controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
 
+    bool grabberOpen = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
+    bool grabberClose = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
+
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
     int rightMotorSpeed = move - turn;
@@ -178,6 +182,13 @@ void opcontrol() {
     } else {
       conveyor.move_velocity(0);
       feeder.move_velocity(0);
+    }
+
+    
+    if (grabberOpen) {
+      grabber.set_value(true);
+    } else if (grabberClose) {
+      grabber.set_value(false);
     }
 
     // conveyor motors
