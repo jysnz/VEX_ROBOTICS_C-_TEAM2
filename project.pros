@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "Conquesta",
+    "project_name": "conquesta",
     "target": "v5",
     "templates": {
       "LemLib": {
