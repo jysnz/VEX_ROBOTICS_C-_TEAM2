@@ -9,7 +9,7 @@
 
 ASSET(path_jerryio_txt);
 // --- Robot state ---
-double x = 0.0, y = 0.0, theta = 0.0;
+double x = 0.0, y = 0.0, theta = 0.0, heading = 0.0; 
 
 const double ARM1_MIN = -402;
 const double ARM1_MAX = 0;
@@ -28,6 +28,12 @@ const double ARM2_LEVEL3_ANGLE = 1500; // degrees
 const double wheelDiameter = 3.25; // inches
 const double trackWidth = 12.0;    // distance between wheels
 const double ticksPerRev = 360.0;  // depends on encoder resolution
+const float PI = 3.14159;
+
+// PID constants
+float kP = 1.0;
+float kI = 0.0;
+float kD = 0.5;
 
 // --- Debug motor limits (degrees and velocity) ---
 const int ARM_MAX_VEL = 600;       // maximum motor velocity for debug motor
@@ -110,35 +116,21 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
 double prevLeft = 0.0;
 double prevRight = 0.0;
 
+
+float ticksToInches(float ticks) {
+  return (ticks / ticksPerRev) * PI * wheelDiameter;
+}
+
+
 void updateOdometry() {
-  // Get current encoder positions (degrees)
-  double leftDeg = left_motor_group.get_position();
-  double rightDeg = right_motor_group.get_position();
+  float leftDist = ticksToInches(left_motor_group.get_position());
+  float rightDist = ticksToInches(right_motor_group.get_position());
+  float distance = (leftDist + rightDist) / 2.0;
+  float deltaTheta = (rightDist - leftDist) / trackWidth;
 
-  // Convert to "ticks"
-  double leftTicks = (leftDeg / 360.0) * ticksPerRev;
-  double rightTicks = (rightDeg / 360.0) * ticksPerRev;
-
-  // Delta ticks
-  double deltaLeftTicks = leftTicks - prevLeft;
-  double deltaRightTicks = rightTicks - prevRight;
-
-  prevLeft = leftTicks;
-  prevRight = rightTicks;
-
-  // Convert ticks → distance
-  double distPerTick = (M_PI * wheelDiameter) / ticksPerRev;
-  double dL = deltaLeftTicks * distPerTick;
-  double dR = deltaRightTicks * distPerTick;
-
-  // Kinematics
-  double dTheta = (dR - dL) / trackWidth;
-  double dS = (dR + dL) / 2.0;
-
-  // Update global pose
-  x += dS * cos(theta + dTheta / 2.0);
-  y += dS * sin(theta + dTheta / 2.0);
-  theta += dTheta;
+  heading += deltaTheta * (180.0 / PI); // degrees
+  x += distance * cos(heading * PI / 180.0);
+  y += distance * sin(heading * PI / 180.0);
 }
 
 void odometryTask() {
@@ -162,82 +154,28 @@ void moveArm2ToAngle(double angle, int velocity = 100) {
   arm2.move_absolute(angle, velocity);
 }
 
-static double normalizeDeg(double ang) {
-  while (ang > 180.0) ang -= 360.0;
-  while (ang < -180.0) ang += 360.0;
-  return ang;
-}
-static double normalizeRad(double ang) {
-  while (ang > M_PI) ang -= 2.0 * M_PI;
-  while (ang < -M_PI) ang += 2.0 * M_PI;
-  return ang;
+float getHeadingCorrection(float desiredHeading) {
+  float error = desiredHeading - heading;
+  float derivative = error;
+  return kP * error + kD * derivative;
 }
 
-void driveToWaypoint(double distanceInInches, int maxSpeed /*=100*/) {
-  // target is distanceInInches forward from current (odometry) pose
-  double startX = x;
-  double startY = y;
-  double startTheta = theta; // radians
 
-  double targetX = startX + distanceInInches * cos(startTheta);
-  double targetY = startY + distanceInInches * sin(startTheta);
-
-  // PID-ish gains (tweak if needed)
-  const double kP_dist = 5.0;     // maps inches -> motor speed unit
-  const double kD_dist = 0.6;
-  const double kP_heading = 30.0; // maps radians -> motor speed unit
-
-  double prevErr = 0.0;
-  double prevPosSum = 0.0;
-  int recoveryAttempts = 0;
-
+void driveToPoint(float targetX, float targetY, float baseSpeed) {
   while (true) {
-    double dx = targetX - x;
-    double dy = targetY - y;
-    double distErr = sqrt(dx * dx + dy * dy);
+    updateOdometry();
 
-    if (distErr < 0.5) break; // reached within 0.5 inch
+    float dx = targetX - x;
+    float dy = targetY - y;
+    float distance = sqrt(dx * dx + dy * dy);
+    float targetHeading = atan2(dy, dx) * (180.0 / PI);
 
-    double pathAngle = atan2(dy, dx);
-    double headingErr = normalizeRad(pathAngle - theta); // radians
+    float correction = getHeadingCorrection(targetHeading);
 
-    double speed = kP_dist * distErr + kD_dist * (distErr - prevErr);
-    double correction = kP_heading * headingErr; // positive -> turn left
+    left_motor_group.move(baseSpeed - correction);
+    right_motor_group.move(baseSpeed + correction);
 
-    // clamp base speed
-    if (speed > maxSpeed) speed = maxSpeed;
-    if (speed < -maxSpeed) speed = -maxSpeed;
-
-    double leftSpeed = speed - correction;
-    double rightSpeed = speed + correction;
-
-    // clamp final speeds
-    leftSpeed = std::clamp(static_cast<int>(leftSpeed), -maxSpeed, maxSpeed);
-    rightSpeed = std::clamp(static_cast<int>(rightSpeed), -maxSpeed, maxSpeed);
-
-    left_motor_group.move(static_cast<int>(leftSpeed));
-    right_motor_group.move(static_cast<int>(rightSpeed));
-
-    // simple stuck detection based on odometry progress
-    double posSum = x + y;
-    double delta = fabs(posSum - prevPosSum);
-    prevPosSum = posSum;
-    if (distErr > 3.0 && delta < 0.01) {
-      recoveryAttempts++;
-      if (recoveryAttempts > 4) {
-        // back off briefly
-        left_motor_group.move(-30);
-        right_motor_group.move(-30);
-        pros::delay(300);
-        left_motor_group.move(0);
-        right_motor_group.move(0);
-        recoveryAttempts = 0;
-      }
-    } else {
-      recoveryAttempts = 0;
-    }
-
-    prevErr = distErr;
+    if (distance < 1.0) break; // stop when close
     pros::delay(20);
   }
 
@@ -245,86 +183,27 @@ void driveToWaypoint(double distanceInInches, int maxSpeed /*=100*/) {
   right_motor_group.move(0);
 }
 
-void driveArc(double distanceInInches, double radiusInInches, int maxSpeed /*=100*/) {
-  // If radius is extremely large, fall back to straight drive
-  if (std::fabs(radiusInInches) >= 1e6) {
-    driveToWaypoint(distanceInInches, maxSpeed);
-    return;
-  }
+void turnByAngle(float angle, float turnSpeed = 30) {
+  float targetHeading = heading + angle;
 
-  // arc angle (radians) = arc length / radius
-  double s = distanceInInches;
-  double R = radiusInInches;
-  double deltaTheta = s / R; // radians; sign follows R
-
-  // compute center of rotation and target pose
-  // robot current pose (x,y,theta)
-  double cx = x + R * sin(theta);   // center x (R to the left is + when R>0 considered right-turn, see below)
-  double cy = y - R * cos(theta);   // center y
-  // target theta
-  double targetTheta = theta + deltaTheta;
-  // target position computed by rotating start vector around center by deltaTheta
-  double startRelX = x - cx;
-  double startRelY = y - cy;
-  double cosd = cos(deltaTheta);
-  double sind = sin(deltaTheta);
-  double targetRelX = startRelX * cosd - startRelY * sind;
-  double targetRelY = startRelX * sind + startRelY * cosd;
-  double targetX = cx + targetRelX;
-  double targetY = cy + targetRelY;
-
-  // simple proportional controllers for progress
-  const double kP_pos = 5.0;
-  const double kD_pos = 0.4;
-  const double kP_heading = 25.0;
-
-  double prevPosErr = 0.0;
-  int recoveryAttempts = 0;
-  double prevSum = x + y;
+  // Normalize target heading to [0, 360)
+  if (targetHeading >= 360) targetHeading -= 360;
+  if (targetHeading < 0) targetHeading += 360;
 
   while (true) {
-    double dx = targetX - x;
-    double dy = targetY - y;
-    double posErr = sqrt(dx * dx + dy * dy);
-    if (posErr < 0.6) break;
+    updateOdometry();
+    float error = targetHeading - heading;
 
-    double pathAngle = atan2(dy, dx);
-    double headingErr = normalizeRad(pathAngle - theta);
+    // Normalize error to shortest turn direction
+    if (error > 180) error -= 360;
+    if (error < -180) error += 360;
 
-    double baseSpeed = kP_pos * posErr + kD_pos * (posErr - prevPosErr);
-    if (baseSpeed > maxSpeed) baseSpeed = maxSpeed;
-    if (baseSpeed < -maxSpeed) baseSpeed = -maxSpeed;
+    if (fabs(error) < 2.0) break;
 
-    double correction = kP_heading * headingErr;
+    float turnDirection = (error > 0) ? 1 : -1;
+    left_motor_group.move(-turnSpeed * turnDirection);
+    right_motor_group.move(turnSpeed * turnDirection);
 
-    double leftSpeed = baseSpeed - correction;
-    double rightSpeed = baseSpeed + correction;
-
-    leftSpeed = std::clamp(static_cast<int>(leftSpeed), -maxSpeed, maxSpeed);
-    rightSpeed = std::clamp(static_cast<int>(rightSpeed), -maxSpeed, maxSpeed);
-
-    left_motor_group.move(static_cast<int>(leftSpeed));
-    right_motor_group.move(static_cast<int>(rightSpeed));
-
-    // stuck detection via odometry
-    double sum = x + y;
-    double delta = fabs(sum - prevSum);
-    prevSum = sum;
-    if (posErr > 3.0 && delta < 0.01) {
-      recoveryAttempts++;
-      if (recoveryAttempts > 4) {
-        left_motor_group.move(-30);
-        right_motor_group.move(-30);
-        pros::delay(350);
-        left_motor_group.move(0);
-        right_motor_group.move(0);
-        recoveryAttempts = 0;
-      }
-    } else {
-      recoveryAttempts = 0;
-    }
-
-    prevPosErr = posErr;
     pros::delay(20);
   }
 
@@ -332,60 +211,7 @@ void driveArc(double distanceInInches, double radiusInInches, int maxSpeed /*=10
   right_motor_group.move(0);
 }
 
-void turnToAngle(double targetDegrees, int maxSpeed /*=80*/) {
-  // Use odometry theta (radians -> degrees)
-  auto toDeg = [](double r) { return r * 180.0 / M_PI; };
-  auto toRad = [](double d) { return d * M_PI / 180.0; };
-
-  double prevErr = 0.0;
-  int recoveryAttempts = 0;
-  double prevThetaDeg = toDeg(theta);
-
-  // PID-ish gains
-  const double kP = 1.6;   // maps degrees -> motor speed
-  const double kD = 0.12;
-
-  while (true) {
-    double currentDeg = toDeg(theta);
-    double error = normalizeDeg(targetDegrees - currentDeg);
-
-    if (fabs(error) < 1.5) break;
-
-    double speed = kP * error + kD * (error - prevErr);
-    if (speed > maxSpeed) speed = maxSpeed;
-    if (speed < -maxSpeed) speed = -maxSpeed;
-
-    // positive speed -> turn right (left negative, right positive)
-    left_motor_group.move(static_cast<int>(-speed));
-    right_motor_group.move(static_cast<int>(speed));
-
-    // simple progress detection using odometry theta change
-    if (fabs(error) > 8.0) {
-      double deltaThetaDeg = fabs(currentDeg - prevThetaDeg);
-      if (deltaThetaDeg < 0.2) {
-        recoveryAttempts++;
-        if (recoveryAttempts > 4) {
-          // brief reverse attempt
-          left_motor_group.move(30 * (error > 0 ? -1 : 1));
-          right_motor_group.move(30 * (error > 0 ? 1 : -1));
-          pros::delay(200);
-          recoveryAttempts = 0;
-        }
-      } else {
-        recoveryAttempts = 0;
-      }
-      prevThetaDeg = currentDeg;
-    } else {
-      recoveryAttempts = 0;
-    }
-
-    prevErr = error;
-    pros::delay(20);
-  }
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
-}
+  
 
 void initialize() {
   pros::lcd::initialize();
@@ -526,13 +352,5 @@ void opcontrol() {
 
 void autonomous() {
   // First path
-  chassis.setPose(0, 0, 0);
-  chassis.moveToPoint(23.148, 24.132, 2000);
-  conveyor.move_velocity(200);
-  pros::delay(1000);
-  conveyor.move_velocity(0);
-
-  // Second path
-  chassis.setPose(0, 0, 0);
-  chassis.moveToPoint(6.247, 43.175, 2000);
+  driveToPoint(10, 10, 200);
 }
