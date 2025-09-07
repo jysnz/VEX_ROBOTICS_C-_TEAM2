@@ -14,8 +14,8 @@ double x = 0.0, y = 0.0, theta = 0.0;
 const double ARM1_MIN = -402;
 const double ARM1_MAX = 0;
 const double ARM1_LEVEL1_ANGLE = -10;   // degrees
-const double ARM1_LEVEL2_ANGLE = -1450; // degrees  
-const double ARM1_LEVEL3_ANGLE = -2400; // degrees
+const double ARM1_LEVEL2_ANGLE = -1350; // degrees  
+const double ARM1_LEVEL3_ANGLE = -2200; // degrees
 
 const double ARM2_MIN = 0.0;
 const double ARM2_MAX = 220.0;
