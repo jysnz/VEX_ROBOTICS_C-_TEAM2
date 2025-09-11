@@ -25,15 +25,22 @@ const double ARM2_LEVEL3_ANGLE = 1500; // degrees
 
 
 // --- Constants ---
-const double wheelDiameter = 3.25; // inches
+const double wheelDiameter = 4; // inches
 const double trackWidth = 12.0;    // distance between wheels
 const double ticksPerRev = 360.0;  // depends on encoder resolution
 const float PI = 3.14159;
 
 // PID constants
-float kP = 1.0;
-float kI = 0.0;
-float kD = 0.5;
+static double kP = 0.45;    // distance P
+static double kI = 0.0;     // distance I (often 0 at first)
+static double kD = 2.0;     // distance D
+static double kH = 0.12;    // heading/straightness P (encoders-only)
+
+// geometry
+static constexpr double WHEEL_DIAM_IN = 4;
+static constexpr double TPI = 360.0 / (M_PI * WHEEL_DIAM_IN); // ticks per inch
+
+static inline int clamp127(double v) { return (int)std::max(-127.0, std::min(127.0, v)); }
 
 // --- Debug motor limits (degrees and velocity) ---
 const int ARM_MAX_VEL = 600;       // maximum motor velocity for debug motor
@@ -45,8 +52,8 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-8, -7}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({10, 9}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-9, -18}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({4, 13}, pros::MotorGears::green);
 
 pros::Motor conveyor(20);
 pros::Motor conveyor1(1);
@@ -63,7 +70,7 @@ lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
                               &right_motor_group,         // right motor group
                               10,                         // 10 inch track width
                               lemlib::Omniwheel::NEW_325, // using new 4" omnis
-                              400,                        // drivetrain rpm
+                              333,                        // drivetrain rpm
                               2                           // horizontal drift
 );
 
@@ -83,11 +90,11 @@ lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder,
                                               lemlib::Omniwheel::NEW_325, -2.5);
 
 // odometry sensors
-lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical wheel
+lemlib::OdomSensors sensors(nullptr, // vertical wheel
                             nullptr,                  // second vertical (none)
-                            &horizontal_tracking_wheel, // horizontal wheel
+                            nullptr, // horizontal wheel
                             nullptr, // second horizontal (none)
-                            &imu     // imu
+                            nullptr     // imu
 );
 
 // lateral PID controller
@@ -259,6 +266,7 @@ void opcontrol() {
     bool conveyorReverse1 =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
 
+    bool auton = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
     bool level1Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
     bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
     bool level3Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
@@ -268,9 +276,9 @@ void opcontrol() {
     bool level3Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
 
     // joystick values
-    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+    int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
-        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
+        -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
 
     // combine forward/back + turning
     int leftMotorSpeed = move + turn;
@@ -283,6 +291,10 @@ void opcontrol() {
     // drive motors
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
+
+    if(auton) {
+      autonomous();
+    }
 
     // helper to clamp velocity
     auto clampVel = [](int vel) { return std::clamp(vel, -100, 100); };
@@ -350,7 +362,156 @@ void opcontrol() {
   }
 }
 
+
+void drive_forward(double inches, int maxSpeed = 110, int accel = 10, int timeout_ms = 4000) {
+    const double targetTicks = inches * TPI;
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    uint32_t start = pros::millis();
+    const int dt_ms = 10;
+
+    double errInt = 0.0;
+    double prevErr = 0.0;
+
+    double speed = 0; // current commanded speed
+
+    while (true) {
+        // get encoder avg
+        double l = left_motor_group.get_position();
+        double r = right_motor_group.get_position();
+        double pos = (l + r) * 0.5;
+
+        // error in ticks
+        double err = targetTicks - pos;
+
+        if (fabs(err) < 10.0) break; // within ~0.1–0.2 in
+        if ((int)(pros::millis() - start) > timeout_ms) break;
+
+        // integrate & derivative
+        errInt += err * (dt_ms / 1000.0);
+        errInt = std::clamp(errInt, -5000.0, 5000.0);
+
+        double dErr = (err - prevErr) / (dt_ms / 1000.0);
+
+        // ----------------------
+        // Trapezoid motion profile
+        // ----------------------
+        if (fabs(speed) < maxSpeed) {
+            speed += accel;
+            if (speed > maxSpeed) speed = maxSpeed;
+        }
+
+        double decelDistance = (speed * speed) / (2.0 * accel);
+        if (fabs(err) <= decelDistance) {
+            speed -= accel;
+            if (speed < 30) speed = 30; // don't drop below min rolling power
+        }
+
+        // ----------------------
+        // PID correction (small trim)
+        // ----------------------
+        double pid = kP * err + kI * errInt + kD * dErr;
+
+        // combine: profile sets base speed, PID trims it
+        double forward = ((err > 0) ? speed : -speed) + pid;
+
+        // clamp final command
+        forward = std::clamp(forward, -(double)maxSpeed, (double)maxSpeed);
+
+        // heading correction (basic drift fix)
+        double headingErr = (l - r);
+        double turn = kH * headingErr;
+
+        int leftCmd  = clamp127(forward - turn);
+        int rightCmd = clamp127(forward + turn);
+
+        left_motor_group.move(leftCmd);
+        right_motor_group.move(rightCmd);
+
+        prevErr = err;
+        pros::delay(dt_ms);
+    }
+
+    left_motor_group.move(0);
+    right_motor_group.move(0);
+}
+
+void drive_curve(double inches, double curveRatio, int maxSpeed = 110, int accel = 10, int timeout_ms = 4000) {
+    // curveRatio > 1.0 → turn left (right motors slower)
+    // curveRatio < 1.0 → turn right (left motors slower)
+    // curveRatio = 1.0 → straight
+
+    const double targetTicks = inches * TPI;
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    uint32_t start = pros::millis();
+    const int dt_ms = 10;
+    double pos = 0.0;
+
+    while (true) {
+        double l = left_motor_group.get_position();
+        double r = right_motor_group.get_position();
+        pos = (l + r) * 0.5;
+
+        if (fabs(targetTicks - pos) < 10.0) break;
+        if ((int)(pros::millis() - start) > timeout_ms) break;
+
+        // basic speed ramp
+        double speed = maxSpeed;
+        if (targetTicks - pos < 500) speed = 50; // slow near end
+
+        // apply curve ratio
+        int leftCmd  = clamp127(speed);
+        int rightCmd = clamp127(speed * curveRatio);
+
+        left_motor_group.move(leftCmd);
+        right_motor_group.move(rightCmd);
+
+        pros::delay(dt_ms);
+    }
+
+    left_motor_group.move(0);
+    right_motor_group.move(0);
+}
+
+void turnRight(int speed, int time) {
+  left_motor_group.move(speed);
+  right_motor_group.move(-speed);
+  pros::delay(time);
+  left_motor_group.move(0);
+  right_motor_group.move(0);
+}
+
+void turnLeft(int speed, int time) {
+  left_motor_group.move(-speed);
+  right_motor_group.move(speed);
+  pros::delay(time);
+  left_motor_group.move(0);
+  right_motor_group.move(0);
+}
+
+void backward(int speed, int time) {
+  left_motor_group.move(-speed);
+  right_motor_group.move(-speed);
+  pros::delay(time);
+  left_motor_group.move(0);
+  right_motor_group.move(0);
+}
+
 void autonomous() {
   // First path
-  driveToPoint(10, 10, 200);
+  drive_forward(24, 110, 5, 500);
+  turnRight(100, 120);
+  //Intake
+  drive_curve(10, 1.3);
+  //Outtake
+  drive_forward(-24, 50, 5, 300);
+  turnRight(100, 120);
+  drive_forward(-24, 50, 5, 600);
+  //Intake
+  drive_forward(24, 50, 5, 600);
+  //Outtake
 }
