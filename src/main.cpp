@@ -39,13 +39,11 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-8, -7}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-8, -2}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 9}, pros::MotorGears::green);
 
-pros::Motor conveyor(20);
-pros::Motor conveyor1(1);
-pros::Motor conveyor2(2);
-
+pros::Motor conveyor(3, pros::MotorGears::green);
+pros::MotorGroup outtake({4, -5}, pros::MotorGears::blue);
 
 pros::Motor arm1(13);
 pros::Motor arm2(12);
@@ -425,13 +423,13 @@ void opcontrol() {
 
     double turnScale = 0.6;
     bool conveyorForward =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
-    bool conveyorReverse =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-    bool conveyorForward1 =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-    bool conveyorReverse1 =
+    bool conveyorReverse =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+    bool outtakeForward =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+    bool outtakeReverse =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
 
     bool level1Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
     bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
@@ -506,15 +504,12 @@ void opcontrol() {
     prevLevel2Arm2 = level2Arm2;
     prevLevel3Arm2 = level3Arm2;
 
-    if (conveyorForward1 && !conveyorReverse1) {
-      conveyor1.move_velocity(200);
-      conveyor2.move_velocity(-200);
-    } else if (conveyorReverse1 && !conveyorForward1) {
-      conveyor1.move_velocity(-200);
-      conveyor2.move_velocity(200);
+    if (outtakeForward && !outtakeReverse) {
+      outtake.move_velocity(600);
+    } else if (outtakeReverse && !outtakeForward) {
+      outtake.move_velocity(-600);
     } else {
-      conveyor1.move_velocity(0);
-      conveyor2.move_velocity(0);
+      outtake.move_velocity(0);
     }
 
     if (conveyorForward && !conveyorReverse) {
