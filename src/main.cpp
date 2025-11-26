@@ -50,8 +50,8 @@ pros::MotorGroup left_motor_group({-8, -2}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 9}, pros::MotorGears::green);
 
 pros::Motor conveyor(3, pros::MotorGears::green);
-pros::MotorGroup outtake({4, -5}, pros::MotorGears::blue);
-
+pros::Motor catapult_arm(7, pros::MotorGears::green);
+pros::Motor intake(4, pros::MotorGears::green);
 pros::Motor arm1(13);
 pros::Motor arm2(12);
 
@@ -146,6 +146,14 @@ void odometryTask() {
 
 void moveArm1ToAngle(double angle, int velocity = 100) {
   arm1.move_absolute(angle, velocity);
+}
+
+void moveCatapultUp (double angle, int velocity = 100) {
+  catapult_arm.move_absolute(angle, velocity);
+}
+
+void moveCatapultDown (double angle, int velocity = 100) {
+  catapult_arm.move_absolute(angle, velocity);
 }
 
 void moveArm2ToAngle(double angle, int velocity = 100) {
@@ -387,24 +395,14 @@ void opcontrol() {
     double Arm2Position = arm2.get_position();
 
     double turnScale = 0.6;
-    bool conveyorForward =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-    bool conveyorReverse =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
-    bool outtakeForward =
+    bool intakeForward =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1) && controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+    bool intakeReverse =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2) && controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+    bool catapultArmOut =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-    bool outtakeReverse =
+    bool catapultArmIn =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-
-    bool level1Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
-    bool level2Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
-    bool level3Arm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
-    bool autoa = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
-
-
-    bool level1Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
-    bool level2Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_LEFT);
-    bool level3Arm2 = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
 
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
@@ -422,67 +420,23 @@ void opcontrol() {
     // drive motors
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
-
-    if(autoa) {
-      autonomous();
-    }
-
-    // helper to clamp velocity
-    auto clampVel = [](int vel) { return std::clamp(vel, -100, 100); };
-
-    // --- ARM1 PRESET POSITION CONTROL (rising-edge taps) ---
-    if (level1Arm && !prevLevel1Arm) {
-      double target = ARM1_LEVEL1_ANGLE; // level1 -> min
-      //target = std::clamp(target, ARM1_MIN, ARM1_MAX);
-      moveArm1ToAngle(target, 150);
-    }
-    if (level2Arm && !prevLevel2Arm) {
-      double target = ARM1_LEVEL2_ANGLE; // level2 -> mid
-      //target = std::clamp(target, ARM1_MIN, ARM1_MAX);
-      moveArm1ToAngle(target, 150);
-    }
-    if (level3Arm && !prevLevel3Arm) {
-      double target = ARM1_LEVEL3_ANGLE; // level3 -> max
-      //target = std::clamp(target, ARM1_MIN, ARM1_MAX);
-      moveArm1ToAngle(target, 150);
-    }
-
-    // --- ARM2 PRESET POSITION CONTROL (rising-edge taps) ---
-    if (level1Arm2 && !prevLevel1Arm2) {
-      double target = ARM2_LEVEL1_ANGLE; // level1 -> min
-      moveArm2ToAngle(target, 150);
-    }
-    if (level2Arm2 && !prevLevel2Arm2) {
-      double target = ARM2_LEVEL2_ANGLE; // level2 -> mid
-      moveArm2ToAngle(target, 150);
-    }
-    if (level3Arm2 && !prevLevel3Arm2) {
-      double target = ARM2_LEVEL3_ANGLE; // level3 -> max
-      moveArm2ToAngle(target, 150);
-    }
-
-    // update previous button states for next loop
-    prevLevel1Arm = level1Arm;
-    prevLevel2Arm = level2Arm;
-    prevLevel3Arm = level3Arm;
-    prevLevel1Arm2 = level1Arm2;
-    prevLevel2Arm2 = level2Arm2;
-    prevLevel3Arm2 = level3Arm2;
-
-    if (outtakeForward && !outtakeReverse) {
-      outtake.move_velocity(600);
-    } else if (outtakeReverse && !outtakeForward) {
-      outtake.move_velocity(-600);
+    
+    if(catapultArmIn && !catapultArmOut) {
+      double target = -300;
+      moveCatapultUp(target, 150);
+    } else if(catapultArmOut && !catapultArmIn) {
+      double target = 0;
+      moveCatapultDown(target, 150);
     } else {
-      outtake.move_velocity(0);
+      catapult_arm.move_velocity(0);
     }
 
-    if (conveyorForward && !conveyorReverse) {
-      conveyor.move_velocity(200);
-    } else if (conveyorReverse && !conveyorForward) {
-      conveyor.move_velocity(-200);
+    if (intakeForward && !intakeReverse) {
+      intake.move_velocity(200);
+    } else if (intakeReverse && !intakeForward) {
+      intake.move_velocity(-200);
     } else {
-      conveyor.move_velocity(0);
+      intake.move_velocity(0);
     }
 
     // conveyor motors
@@ -501,29 +455,29 @@ void autonomous() {
   // // 4. Back into target zone
   // driveToPointBackward(20, 20, 80);
 
-  driveForward(15, 100);
-  turnToAngle(45);
-  driveForward(2, 100);
-  outtake.move_velocity(600);
-  pros::delay(2000);
-  outtake.move_velocity(0);
-  driveArc(40, 90, 70, true);
-  outtake.move_velocity(-600);
-  pros::delay(2000);
-  outtake.move_velocity(0);
-  turnToAngle(360);
-  driveForward(12, 100);
-  turnToAngle(45);
-  driveForward(5, 100);
-  outtake.move_velocity(600);
-  pros::delay(3000);
-  outtake.move_velocity(0);
-  turnToAngle(360);
-  driveForward(12, 100);
-  moveArm1ToAngle(ARM1_LEVEL3_ANGLE, 150);
-  outtake.move_velocity(-600);
-  conveyor.move_velocity(-200);
-  pros::delay(3000);
+  // driveForward(15, 100);
+  // turnToAngle(45);
+  // driveForward(2, 100);
+  // outtake.move_velocity(600);
+  // pros::delay(2000);
+  // outtake.move_velocity(0);
+  // driveArc(40, 90, 70, true);
+  // outtake.move_velocity(-600);
+  // pros::delay(2000);
+  // outtake.move_velocity(0);
+  // turnToAngle(360);
+  // driveForward(12, 100);
+  // turnToAngle(45);
+  // driveForward(5, 100);
+  // outtake.move_velocity(600);
+  // pros::delay(3000);
+  // outtake.move_velocity(0);
+  // turnToAngle(360);
+  // driveForward(12, 100);
+  // moveArm1ToAngle(ARM1_LEVEL3_ANGLE, 150);
+  // outtake.move_velocity(-600);
+  // conveyor.move_velocity(-200);
+  // pros::delay(3000);
   
 }
 
