@@ -50,7 +50,7 @@ pros::MotorGroup left_motor_group({-8, -2}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 9}, pros::MotorGears::green);
 
 pros::Motor conveyor(3, pros::MotorGears::green);
-pros::Motor catapult_arm(7, pros::MotorGears::green);
+pros::Motor catapult_arm(7, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
 pros::Motor arm1(13);
 pros::Motor arm2(12);
@@ -165,6 +165,8 @@ float getHeadingCorrection(float desiredHeading) {
   float derivative = error;
   return kP * error + kD * derivative;
 }
+
+
 
 
 void driveToPoint(float targetX, float targetY, float baseSpeed, int timeout = 5000) {
@@ -366,6 +368,7 @@ void initialize() {
 
   // Make tasks static so they persist after initialize() returns.
   static pros::Task odoTask(odometryTask);
+  
 
   static pros::Task screen_task([]() {
     while (true) {
@@ -396,14 +399,11 @@ void opcontrol() {
 
     double turnScale = 0.6;
     bool intakeForward =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1) && controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
     bool intakeReverse =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2) && controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-    bool catapultArmOut =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-    bool catapultArmIn =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+    bool catapultArmOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+    bool catapultArmIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
@@ -421,14 +421,11 @@ void opcontrol() {
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
     
-    if(catapultArmIn && !catapultArmOut) {
-      double target = -300;
-      moveCatapultUp(target, 150);
-    } else if(catapultArmOut && !catapultArmIn) {
-      double target = 0;
-      moveCatapultDown(target, 150);
-    } else {
-      catapult_arm.move_velocity(0);
+    if (catapultArmIn && !catapultArmOut) {
+      catapult_arm.move_absolute(-600, 100);
+    }
+    else if (catapultArmOut && !catapultArmIn) {
+      catapult_arm.move_absolute(0, 100);
     }
 
     if (intakeForward && !intakeReverse) {
