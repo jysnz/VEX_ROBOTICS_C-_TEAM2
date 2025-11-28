@@ -49,10 +49,10 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 pros::MotorGroup left_motor_group({-1, -3, -2}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({9, 8, 10}, pros::MotorGears::green);
 
-pros::Motor conveyor(3, pros::MotorGears::green);
 pros::Motor catapult_arm(7, pros::MotorGears::red);
-pros::Motor catapult(20, pros::MotorGears::red);
+pros::Motor catapult(13, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
+pros::Motor matchload(5, pros::MotorGears::green);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -66,7 +66,7 @@ lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
 );
 
 // imu
-pros::Imu imu(10);
+pros::Imu imu(17);
 // horizontal tracking wheel encoder
 pros::Rotation horizontal_encoder(20);
 // vertical tracking wheel encoder
@@ -352,6 +352,7 @@ void initialize() {
   pros::lcd::initialize();
   catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   catapult.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  matchload.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   chassis.calibrate();
 
   // Make tasks static so they persist after initialize() returns.
@@ -384,19 +385,33 @@ void opcontrol() {
 
     double turnScale = 0.6;
     bool intakeForward =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
     bool intakeReverse =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
+    bool intakePause =
+        controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
+    bool revertControls = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
     bool catapultArmOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
     bool catapultArmIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
     bool catapultOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
     bool catapultIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+    bool matchLoad = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
         controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
 
     // combine forward/back + turning
+    if(!revertControls) {
+      move = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+      turn =
+          controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X) * turnScale;
+    }else{
+      move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+      turn =
+          -controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X) * turnScale;
+    }
+
     int leftMotorSpeed = move + turn;
     int rightMotorSpeed = move - turn;
 
@@ -407,12 +422,18 @@ void opcontrol() {
     // drive motors
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
+
+    if(matchLoad) {
+      matchload.move_absolute(-600, 100);
+    } else {
+      matchload.move_absolute(0, 100);
+    }
     
     if (catapultArmIn && !catapultArmOut) {
-      catapult_arm.move_absolute(-600, 100);
+      catapult.move_absolute(-600, 100);
     }
     else if (catapultArmOut && !catapultArmIn) {
-      catapult_arm.move_absolute(0, 100);
+      catapult.move_absolute(0, 100);
     }
 
     if (catapultIn && !catapultOut) {
@@ -426,7 +447,7 @@ void opcontrol() {
       intake.move_velocity(200);
     } else if (intakeReverse && !intakeForward) {
       intake.move_velocity(-200);
-    } else {
+    } else if (intakePause || (!intakeForward && !intakeReverse)) {
       intake.move_velocity(0);
     }
 
