@@ -51,6 +51,7 @@ pros::MotorGroup right_motor_group({9, 8, 10}, pros::MotorGears::green);
 
 pros::Motor conveyor(3, pros::MotorGears::green);
 pros::Motor catapult_arm(7, pros::MotorGears::red);
+pros::Motor catapult(20, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
@@ -142,11 +143,11 @@ void odometryTask() {
   }
 }
 
-void moveCatapultUp (double angle, int velocity = 100) {
+void moveCatapultArmUp (double angle, int velocity = 100) {
   catapult_arm.move_absolute(angle, velocity);
 }
 
-void moveCatapultDown (double angle, int velocity = 100) {
+void moveCatapultArmDown (double angle, int velocity = 100) {
   catapult_arm.move_absolute(angle, velocity);
 }
 
@@ -349,8 +350,8 @@ void driveBackward(float distance, float maxSpeed) {
 
 void initialize() {
   pros::lcd::initialize();
-  arm1.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  arm2.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  catapult.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   chassis.calibrate();
 
   // Make tasks static so they persist after initialize() returns.
@@ -381,9 +382,6 @@ void opcontrol() {
     double arm1PrevSpeed;
     double arm2PrevSpeed;
 
-    double Arm1Position = arm1.get_position();
-    double Arm2Position = arm2.get_position();
-
     double turnScale = 0.6;
     bool intakeForward =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
@@ -391,6 +389,8 @@ void opcontrol() {
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
     bool catapultArmOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
     bool catapultArmIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+    bool catapultOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+    bool catapultIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
     // joystick values
     int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
     int turn =
@@ -412,6 +412,13 @@ void opcontrol() {
       catapult_arm.move_absolute(-600, 100);
     }
     else if (catapultArmOut && !catapultArmIn) {
+      catapult_arm.move_absolute(0, 100);
+    }
+
+    if (catapultIn && !catapultOut) {
+      catapult_arm.move_absolute(-200, 100);
+    }
+    else if (catapultOut && !catapultIn) {
       catapult_arm.move_absolute(0, 100);
     }
 
