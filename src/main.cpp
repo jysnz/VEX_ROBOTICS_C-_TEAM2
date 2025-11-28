@@ -142,10 +142,6 @@ void odometryTask() {
   }
 }
 
-void moveArm1ToAngle(double angle, int velocity = 100) {
-  arm1.move_absolute(angle, velocity);
-}
-
 void moveCatapultUp (double angle, int velocity = 100) {
   catapult_arm.move_absolute(angle, velocity);
 }
@@ -154,18 +150,11 @@ void moveCatapultDown (double angle, int velocity = 100) {
   catapult_arm.move_absolute(angle, velocity);
 }
 
-void moveArm2ToAngle(double angle, int velocity = 100) {
-  arm2.move_absolute(angle, velocity);
-}
-
 float getHeadingCorrection(float desiredHeading) {
   float error = desiredHeading - heading;
   float derivative = error;
   return kP * error + kD * derivative;
 }
-
-
-
 
 void driveToPoint(float targetX, float targetY, float baseSpeed, int timeout = 5000) {
   int startTime = pros::millis();
