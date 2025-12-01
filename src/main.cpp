@@ -46,8 +46,8 @@ const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
-pros::MotorGroup left_motor_group({-1, -3, -2}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({9, 8, 10}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
 pros::Motor catapult(5, pros::MotorGears::red);
