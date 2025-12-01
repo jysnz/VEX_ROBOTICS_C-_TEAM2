@@ -50,9 +50,8 @@ pros::MotorGroup left_motor_group({-1, -3, -2}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({9, 8, 10}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
-pros::Motor catapult(13, pros::MotorGears::red);
+pros::Motor catapult(5, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
-pros::Motor matchload(5, pros::MotorGears::green);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -350,9 +349,8 @@ void driveBackward(float distance, float maxSpeed) {
 
 void initialize() {
   pros::lcd::initialize();
-  catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  catapult.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  matchload.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+  catapult.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
   chassis.calibrate();
 
   // Make tasks static so they persist after initialize() returns.
@@ -383,7 +381,6 @@ void opcontrol() {
     double arm1PrevSpeed;
     double arm2PrevSpeed;
 
-    double turnScale = 0.6;
     bool intakeForward =
         controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
     bool intakeReverse =
@@ -397,56 +394,42 @@ void opcontrol() {
     bool catapultIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
     bool matchLoad = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
     // joystick values
-    int move = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+    int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
     int turn =
-        controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_X) * turnScale;
-
-    // combine forward/back + turning
-    if(!revertControls) {
-      move = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-      turn =
-          controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X) * turnScale;
-    }else{
-      move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-      turn =
-          -controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X) * turnScale;
-    }
+        controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+    
+    int leftSpeed = 100;
+    int rightSpeed = 127;
 
     int leftMotorSpeed = move + turn;
     int rightMotorSpeed = move - turn;
 
     // clamp values so they don’t exceed -127 to 127
-    leftMotorSpeed = std::clamp(leftMotorSpeed, -127, 127);
-    rightMotorSpeed = std::clamp(rightMotorSpeed, -127, 127);
+    leftMotorSpeed = std::clamp(leftMotorSpeed, -leftSpeed, leftSpeed);
+    rightMotorSpeed = std::clamp(rightMotorSpeed, -rightSpeed, rightSpeed);
 
     // drive motors
     left_motor_group.move(leftMotorSpeed);
     right_motor_group.move(rightMotorSpeed);
-
-    if(matchLoad) {
-      matchload.move_absolute(-600, 100);
-    } else {
-      matchload.move_absolute(0, 100);
-    }
     
     if (catapultArmIn && !catapultArmOut) {
-      catapult.move_absolute(-600, 100);
+      catapult.move_absolute(20, 100);
     }
     else if (catapultArmOut && !catapultArmIn) {
       catapult.move_absolute(0, 100);
     }
 
     if (catapultIn && !catapultOut) {
-      catapult_arm.move_absolute(-200, 100);
+      catapult_arm.move_absolute(-1500, 100);
     }
     else if (catapultOut && !catapultIn) {
       catapult_arm.move_absolute(0, 100);
     }
 
     if (intakeForward && !intakeReverse) {
-      intake.move_velocity(200);
+      intake.move_velocity(150);
     } else if (intakeReverse && !intakeForward) {
-      intake.move_velocity(-200);
+      intake.move_velocity(-150);
     } else if (intakePause || (!intakeForward && !intakeReverse)) {
       intake.move_velocity(0);
     }
