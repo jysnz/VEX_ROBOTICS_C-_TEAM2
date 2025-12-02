@@ -445,16 +445,12 @@ void opcontrol() {
         }
 
         if (discoreDown) {
-            // Make motor fully free by using COAST
-            discore.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-
             // Move freely down (no braking)
-            discore.move_absolute(40, 60);
+            discore.move_velocity(0);
         }
 
         else if (discoreUp) {
             // Use HOLD or BRAKE so it stops properly when going up
-            discore.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE); // or HOLD
             discore.move_absolute(-400, 60);
         }
 
