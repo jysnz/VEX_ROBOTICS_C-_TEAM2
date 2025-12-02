@@ -13,19 +13,6 @@ ASSET(path_jerryio_txt);
 // --- Robot state ---
 double x = 0.0, y = 0.0, theta = 0.0, heading = 0.0;
 
-const double ARM1_MIN = -402;
-const double ARM1_MAX = 0;
-const double ARM1_LEVEL1_ANGLE = -10;   // degrees
-const double ARM1_LEVEL2_ANGLE = -1350; // degrees  
-const double ARM1_LEVEL3_ANGLE = -2200; // degrees
-
-const double ARM2_MIN = 0.0;
-const double ARM2_MAX = 220.0;
-const double ARM2_LEVEL1_ANGLE = 0;    // degrees
-const double ARM2_LEVEL2_ANGLE = 1300; // degrees 
-const double ARM2_LEVEL3_ANGLE = 1500; // degrees
-
-
 // --- Constants ---
 const double wheelDiameter = 3.25; // inches
 const double trackWidth = 12.0;    // distance between wheels
@@ -37,14 +24,6 @@ const float PI = 3.14159;
 float kP = 1.0;
 float kI = 0.0;
 float kD = 0.5;
-
-// --- Debug motor limits (degrees and velocity) ---
-const int ARM_MAX_VEL = 600;       // maximum motor velocity for debug motor
-const double ARM_MIN_ANGLE = 0.0;  // minimum allowed angle (degrees)
-const double ARM_MAX_ANGLE = 90.0; // maximum allowed angle (degrees)
-const double ARM_SAFETY_MARGIN =
-    15.0;                      // degrees within limit to start scaling down
-const int ARM_ACCEL_STEP = 40; // maximum change in velocity per loop iteration
 
 // left motor group
 // left side: 7 and 6
