@@ -1,6 +1,8 @@
 #include "main.h"
 #include "lemlib/api.hpp"
+#include "pros/abstract_motor.hpp"
 #include "pros/misc.h"
+#include "pros/motors.h"
 #include "pros/motors.hpp"
 #include "pros/rtos.hpp"
 #include <algorithm>
@@ -50,8 +52,9 @@ pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
-pros::Motor catapult(5, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
+pros::Motor matchloader(11, pros::MotorGears::red);
+pros::Motor discore(12, pros::MotorGears::green);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -349,9 +352,10 @@ void driveBackward(float distance, float maxSpeed) {
 
 void initialize() {
   pros::lcd::initialize();
-  catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-  catapult.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
   chassis.calibrate();
+  left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+  right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+  discore.move_absolute(-400, 100);
 
   // Make tasks static so they persist after initialize() returns.
   static pros::Task odoTask(odometryTask);
@@ -368,75 +372,140 @@ void initialize() {
 }
 
 void opcontrol() {
-  // previous button states for edge detection (persist across loops)
-  static bool prevLevel1Arm = false;
-  static bool prevLevel2Arm = false;
-  static bool prevLevel3Arm = false;
-  static bool prevLevel1Arm2 = false;
-  static bool prevLevel2Arm2 = false;
-  static bool prevLevel3Arm2 = false;
-
-  while (true) {
-    // conveyor buttons
-    double arm1PrevSpeed;
-    double arm2PrevSpeed;
-
-    bool intakeForward =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
-    bool intakeReverse =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
-    bool intakePause =
-        controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
-    bool revertControls = controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN);
-    bool catapultArmOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
-    bool catapultArmIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-    bool catapultOut = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
-    bool catapultIn  = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
-    bool matchLoad = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
-    // joystick values
-    int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-    int turn =
-        controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+    // For Matchloader cycling logic
+    const int FORWARD_VELOCITY = 200; 
+    const int REVERSE_VELOCITY = -200; 
+    static bool isSpinningForward = false; 
+    static bool isSpinningBackward = false; 
     
-    int leftSpeed = 100;
-    int rightSpeed = 127;
+    // NEW: Drivetrain Reversal State
+    static bool controlsReversed = false; 
+    // This variable tracks if the controls should be reversed (driving backward/reverse tank).
 
-    int leftMotorSpeed = move + turn;
-    int rightMotorSpeed = move - turn;
+    while (true) {
+        // --- 1. Get Controller Input ---
+        
+        // Intake/Matchloader controls
+        bool intakeForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+        bool intakeReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+        bool intakePause = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+        
+        // Catapult/Arm controls
+        bool catapultArm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        bool discoreDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
+        bool discoreUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
+        
+        // Matchloader control using new press detection for cycling
+        bool matchLoadTap = controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B); 
+        
+        // NEW: Down button tap detection for reversing controls
+        bool reverseControlTap = controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN);
 
-    // clamp values so they don’t exceed -127 to 127
-    leftMotorSpeed = std::clamp(leftMotorSpeed, -leftSpeed, leftSpeed);
-    rightMotorSpeed = std::clamp(rightMotorSpeed, -rightSpeed, rightSpeed);
+        // Drivetrain Joystick values
+        // Note: 'move' is already negative for forward movement
+        int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+        
+        // Max speed for clamping
+        const int MAX_SPEED = 127;
 
-    // drive motors
-    left_motor_group.move(leftMotorSpeed);
-    right_motor_group.move(rightMotorSpeed);
-    
-    if (catapultArmIn && !catapultArmOut) {
-      catapult.move_absolute(20, 100);
+        // --- 2. Drivetrain Control (Tank Drive with Toggle) ---
+        
+        // Toggle the reversal state on a tap of the DOWN button
+        if (reverseControlTap) {
+            controlsReversed = !controlsReversed;
+        }
+
+        // Apply reversal logic
+        if (controlsReversed) {
+            // Reverse movement: Forward stick input now drives backward, and vice-versa.
+            // Also reverse turning direction relative to the chassis by flipping 'turn'.
+            move = -move; 
+            turn = turn;
+        }
+        
+        // Calculate final motor speeds
+        int leftMotorSpeed = move + turn;
+        int rightMotorSpeed = move - turn;
+
+        // Clamp values so they don’t exceed -127 to 127
+        leftMotorSpeed = std::clamp(leftMotorSpeed, -MAX_SPEED, MAX_SPEED);
+        rightMotorSpeed = std::clamp(rightMotorSpeed, -MAX_SPEED, MAX_SPEED);
+
+        // Drive motors
+        left_motor_group.move(leftMotorSpeed);
+        right_motor_group.move(rightMotorSpeed);
+        
+        // --- 3. Catapult/Arm Control ---
+
+        if (catapultArm) { // Assuming catapultArm is R1
+            catapult_arm.move_absolute(-600, 200);
+        } else {
+            catapult_arm.move_absolute(0, 200);
+        }
+
+        if (discoreDown) {
+            // Make motor fully free by using COAST
+            discore.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+
+            // Move freely down (no braking)
+            discore.move_absolute(40, 60);
+        }
+
+        else if (discoreUp) {
+            // Use HOLD or BRAKE so it stops properly when going up
+            discore.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE); // or HOLD
+            discore.move_absolute(-400, 60);
+        }
+
+        // --- 4. Matchloader Control (Toggled Cycling Logic) ---
+        
+        if (matchLoadTap) {
+            // Check the current state and transition to the next state in the cycle
+            if (isSpinningForward) {
+                isSpinningForward = false;
+                isSpinningBackward = true;
+                
+            } else if (isSpinningBackward) {
+                isSpinningBackward = false;
+                
+            } else {
+                isSpinningForward = true;
+                isSpinningBackward = false;
+            }
+        }
+        
+        // Execute the motor command based on the current state
+        if (isSpinningForward) {
+            // First Tap: Spin Forward
+            matchloader.move_velocity(REVERSE_VELOCITY); // Using REVERSE_VELOCITY as forward in your old code
+            matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+            
+        } else if (isSpinningBackward) {
+            // Second Tap: Spin Backward
+            matchloader.move_velocity(FORWARD_VELOCITY); // Using FORWARD_VELOCITY as backward in your old code
+            matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+            
+        } else {
+            // Third Tap / Stopped state: Stop the motor
+            matchloader.move_velocity(0);
+        }
+        
+        // --- 5. Intake Control ---
+
+        if (intakeForward && !intakeReverse) {
+            intake.move_velocity(200);
+        } else if (intakeReverse && !intakeForward) {
+            intake.move_velocity(-200);
+        }
+
+        if (intakePause) {
+            intake.move_velocity(0);
+        }
+
+        // --- 6. Loop Delay ---
+        pros::delay(20); // loop delay (20ms is standard for PROS)
     }
-    else if (catapultArmOut && !catapultArmIn) {
-      catapult.move_absolute(0, 100);
-    }
-
-    if (catapultIn && !catapultOut) {
-      catapult_arm.move_absolute(-1500, 100);
-    }
-    else if (catapultOut && !catapultIn) {
-      catapult_arm.move_absolute(0, 100);
-    }
-
-    if (intakeForward && !intakeReverse) {
-      intake.move_velocity(150);
-    } else if (intakeReverse && !intakeForward) {
-      intake.move_velocity(-150);
-    } else if (intakePause || (!intakeForward && !intakeReverse)) {
-      intake.move_velocity(0);
-    }
-
-    // conveyor motors
-    pros::delay(20); // loop delay
-  }
 }
 
 void autonomous() {
