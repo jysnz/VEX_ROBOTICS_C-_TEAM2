@@ -32,7 +32,7 @@ pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
-pros::Motor matchloader(11, pros::MotorGears::red);
+pros::Motor matchloader(5, pros::MotorGears::red);
 pros::Motor discore(12, pros::MotorGears::green);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
@@ -375,7 +375,8 @@ void opcontrol() {
         bool discoreUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
         
         // Matchloader control using new press detection for cycling
-        bool matchLoadTap = controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B); 
+        bool matchLoadUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B); 
+        bool matchLoadDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
         
         // NEW: Down button tap detection for reversing controls
         bool reverseControlTap = controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN);
@@ -435,35 +436,10 @@ void opcontrol() {
 
         // --- 4. Matchloader Control (Toggled Cycling Logic) ---
         
-        if (matchLoadTap) {
-            // Check the current state and transition to the next state in the cycle
-            if (isSpinningForward) {
-                isSpinningForward = false;
-                isSpinningBackward = true;
-                
-            } else if (isSpinningBackward) {
-                isSpinningBackward = false;
-                
-            } else {
-                isSpinningForward = true;
-                isSpinningBackward = false;
-            }
-        }
-        
-        // Execute the motor command based on the current state
-        if (isSpinningForward) {
-            // First Tap: Spin Forward
-            matchloader.move_velocity(REVERSE_VELOCITY); // Using REVERSE_VELOCITY as forward in your old code
-            matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-            
-        } else if (isSpinningBackward) {
-            // Second Tap: Spin Backward
-            matchloader.move_velocity(FORWARD_VELOCITY); // Using FORWARD_VELOCITY as backward in your old code
-            matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
-            
-        } else {
-            // Third Tap / Stopped state: Stop the motor
-            matchloader.move_velocity(0);
+        if (matchLoadUp && !matchLoadDown) {
+          matchloader.move_absolute(1400, 100);
+        }else if (matchLoadDown && !matchLoadUp) {
+          matchloader.move_absolute(0, 100);
         }
         
         // --- 5. Intake Control ---
