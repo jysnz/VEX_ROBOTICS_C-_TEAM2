@@ -330,24 +330,112 @@ void driveBackward(float distance, float maxSpeed) {
 
 
 void initialize() {
-  pros::lcd::initialize();
-  chassis.calibrate();
-  left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
-  right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
-  discore.move_absolute(-400, 100);
+    pros::lcd::initialize();
+    chassis.calibrate();
+    discore.move_absolute(-400, 100);
 
-  // Make tasks static so they persist after initialize() returns.
-  static pros::Task odoTask(odometryTask);
-  
+    // Make tasks static so they persist
+    static pros::Task odoTask(odometryTask);
 
-  static pros::Task screen_task([]() {
-    while (true) {
-      pros::lcd::print(0, "X: %.2f", x);
-      pros::lcd::print(1, "Y: %.2f", y);
-      pros::lcd::print(2, "Theta: %.2f", theta);
-      pros::delay(20);
-    }
-  });
+    static pros::Task screen_task([]() {
+        // --- LAYOUT CONSTANTS ---
+        const int P_X = 240;       // Panel Start X (Middle of screen)
+        const int P_W = 240;       // Panel Width
+        const int BG_COLOR = 0x202020; 
+
+        while (true) {
+            // 1. CLEAR DASHBOARD AREA (Prevent ghosting)
+            pros::screen::set_pen(BG_COLOR);
+            pros::screen::fill_rect(P_X, 0, 480, 240);
+
+            // ==========================================
+            // ROW 1: BATTERY STATUS (Top)
+            // ==========================================
+            double bat = pros::battery::get_capacity();
+            int bat_y = 20;       // Row Y position
+            int bat_h = 30;       // Icon Height
+            int bat_w = 70;       // Icon Width
+            int icon_x = P_X + 130; // Icon X position
+
+            // Text: "BAT: 99%"
+            // Alignment: Offset Y by +5 pixels to center with the 30px tall icon
+            pros::screen::set_pen(0xFFFFFF);
+            pros::screen::print(pros::E_TEXT_LARGE, P_X + 10, bat_y + 3, "BAT: %3.0f%%", bat);
+
+            // Graphic: Battery Body
+            uint32_t bat_col = (bat > 60) ? 0x00FFFF : (bat > 30 ? 0xFFA500 : 0xFF0000); // Cyan/Orange/Red
+            pros::screen::set_pen(0xFFFFFF); // White Border
+            pros::screen::draw_rect(icon_x, bat_y, icon_x + bat_w, bat_y + bat_h);
+            
+            // Graphic: Positive Terminal (Nub)
+            pros::screen::fill_rect(icon_x + bat_w, bat_y + 8, icon_x + bat_w + 5, bat_y + bat_h - 8);
+
+            // Graphic: Fill Level
+            // -2 padding so it fits inside the white border
+            int fill = (int)((bat / 100.0) * (bat_w - 4));
+            pros::screen::set_pen(bat_col);
+            pros::screen::fill_rect(icon_x + 2, bat_y + 2, icon_x + 2 + fill, bat_y + bat_h - 2);
+
+
+            // ==========================================
+            // ROWS 2-5: MOTOR STRESS (Grid System)
+            // ==========================================
+            // We use a helper lambda to keep alignment identical for every row
+            auto drawRow = [&](int row_idx, const char* label, double temp) {
+                int row_h = 40;            // Height of each row space
+                int start_y = 70;          // Y position where motor list starts
+                int y = start_y + (row_idx * row_h);
+                
+                // 1. LABEL (Left Aligned)
+                // Offset Y by +8 to vertically center with the bar
+                pros::screen::set_pen(0xFFFFFF); 
+                pros::screen::print(pros::E_TEXT_MEDIUM, P_X + 10, y + 8, label);
+
+                // 2. STRESS BAR (Center)
+                // Max safe temp ~60C. 
+                int bar_x = P_X + 80;      // Start X (Leaving 70px for text)
+                int bar_w = 100;           // Max Width
+                int bar_h = 16;            // Bar Height
+                int bar_y = y + 6;         // Bar Y (Pushed down to center)
+
+                // Draw Empty Track (Dark Grey)
+                pros::screen::set_pen(0x404040); 
+                pros::screen::fill_rect(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h);
+
+                // Draw Active Stress (Color Coded)
+                double stress = temp / 60.0;
+                if(stress > 1.0) stress = 1.0;
+                int fill_w = (int)(stress * bar_w);
+                
+                uint32_t col = 0x00FF00; // Green
+                if(temp > 45) col = 0xFFA500; // Orange
+                if(temp > 55) col = 0xFF0000; // Red
+
+                pros::screen::set_pen(col);
+                pros::screen::fill_rect(bar_x, bar_y, bar_x + fill_w, bar_y + bar_h);
+
+                // 3. NUMBER VALUE (Right Aligned)
+                // Offset Y by +10 for Small text alignment
+                pros::screen::set_pen(0xFFFFFF);
+                pros::screen::print(pros::E_TEXT_SMALL, bar_x + bar_w + 10, y + 8, "%.0fC", temp);
+            };
+
+            // Calculate Avg Drive Temp
+            double d_temp = 0;
+            d_temp += left_motor_group.get_temperature();
+            d_temp += right_motor_group.get_temperature();
+            d_temp /= 2.0;
+
+            // Draw Rows
+            drawRow(0, "Drive",  d_temp);
+            drawRow(1, "Cata",   catapult_arm.get_temperature());
+            drawRow(2, "Intake", intake.get_temperature());
+            drawRow(3, "Load",   matchloader.get_temperature());
+
+            // Loop Delay
+            pros::delay(200);
+        }
+    });
 }
 
 void opcontrol() {
@@ -419,9 +507,9 @@ void opcontrol() {
         // --- 3. Catapult/Arm Control ---
 
         if (catapultArm) { // Assuming catapultArm is R1
-            catapult_arm.move_absolute(-600, 200);
+            catapult_arm.move_absolute(-600, 400);
         } else {
-            catapult_arm.move_absolute(0, 200);
+            catapult_arm.move_absolute(0, 400);
         }
 
         if (discoreDown) {
