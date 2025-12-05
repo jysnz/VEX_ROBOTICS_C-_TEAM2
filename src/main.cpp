@@ -8,15 +8,15 @@
 #include <algorithm>
 #include <cmath>
 
-
 ASSET(path_jerryio_txt);
+
 // --- Robot state ---
 double x = 0.0, y = 0.0, theta = 0.0, heading = 0.0;
 
 // --- Constants ---
 const double wheelDiameter = 3.25; // inches
 const double trackWidth = 12.0;    // distance between wheels
-const double ticksPerRev = 360.0;  // depends on encoder resolution
+const double ticksPerRev = 360.0;  // motor degrees per revolution
 
 const float PI = 3.14159;
 
@@ -25,8 +25,7 @@ float kP = 1.0;
 float kI = 0.0;
 float kD = 0.5;
 
-// left motor group
-// left side: 7 and 6
+// --- Motors ---
 pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
 
@@ -37,7 +36,7 @@ pros::Motor discore(12, pros::MotorGears::green);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
-// drivetrain settings
+// --- Drivetrain ---
 lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
                               &right_motor_group,         // right motor group
                               10,                         // 10 inch track width
@@ -46,22 +45,17 @@ lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
                               2                           // horizontal drift
 );
 
-// imu
+// --- Odometry ---
 pros::Imu imu(17);
-// horizontal tracking wheel encoder
 pros::Rotation horizontal_encoder(20);
-// vertical tracking wheel encoder
 pros::adi::Encoder vertical_encoder('C', 'D', true);
 
-// horizontal tracking wheel
 lemlib::TrackingWheel horizontal_tracking_wheel(&horizontal_encoder,
                                                 lemlib::Omniwheel::NEW_325,
                                                 -5.75);
-// vertical tracking wheel
 lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder,
                                               lemlib::Omniwheel::NEW_325, -2.5);
 
-// odometry sensors
 lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical wheel
                             nullptr,                  // second vertical (none)
                             &horizontal_tracking_wheel, // horizontal wheel
@@ -69,36 +63,25 @@ lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical wheel
                             &imu     // imu
 );
 
-// lateral PID controller
+// Lateral & Angular PID
 lemlib::ControllerSettings lateral_controller(10, 0, 3, 3, 1, 100, 3, 500, 20);
-
-// angular PID controller
 lemlib::ControllerSettings angular_controller(2, 0, 10, 0, 0, 0, 0, 0, 0);
 
-lemlib::ExpoDriveCurve
-    throttle_curve(3,    // joystick deadband out of 127
-                   10,   // minimum output where drivetrain will move out of 127
-                   1.019 // expo curve gain
-    );
+// Expo drive curves
+lemlib::ExpoDriveCurve throttle_curve(3, 10, 1.019);
+lemlib::ExpoDriveCurve steer_curve(3, 10, 1.019);
 
-// input curve for steer input during driver control
-lemlib::ExpoDriveCurve
-    steer_curve(3,    // joystick deadband out of 127
-                10,   // minimum output where drivetrain will move out of 127
-                1.019 // expo curve gain
-    );
-
-// create the chassis
+// Chassis
 lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
                         sensors, &throttle_curve, &steer_curve);
 
 double prevLeft = 0.0;
 double prevRight = 0.0;
 
+// --- Helper functions ---
 float ticksToInches(float ticks) {
   return (ticks / ticksPerRev) * PI * wheelDiameter;
 }
-
 
 void updateOdometry() {
   float leftDist = ticksToInches(left_motor_group.get_position());
@@ -112,7 +95,6 @@ void updateOdometry() {
 }
 
 void odometryTask() {
-  // Reset encoders
   left_motor_group.tare_position();
   right_motor_group.tare_position();
   prevLeft = 0;
@@ -120,468 +102,175 @@ void odometryTask() {
 
   while (true) {
     updateOdometry();
-    pros::delay(10); // update every 10ms
+    pros::delay(10);
   }
 }
 
-void moveCatapultArmUp (double angle, int velocity = 100) {
+void moveCatapultArmUp(double angle, int velocity = 100) {
   catapult_arm.move_absolute(angle, velocity);
 }
 
-void moveCatapultArmDown (double angle, int velocity = 100) {
+void moveCatapultArmDown(double angle, int velocity = 100) {
   catapult_arm.move_absolute(angle, velocity);
 }
 
-float getHeadingCorrection(float desiredHeading) {
-  float error = desiredHeading - heading;
-  float derivative = error;
-  return kP * error + kD * derivative;
+// --- New drive_for_inches function ---
+double inchesToDegrees(double inches) {
+    double wheelCircumference = PI * wheelDiameter;
+    double rotations = inches / wheelCircumference;
+    return rotations * 360.0; // degrees
 }
 
-void driveToPoint(float targetX, float targetY, float baseSpeed, int timeout = 5000) {
-  int startTime = pros::millis();
+void drive_for_inches(double speed, double inches) {
+    double targetDegrees = inchesToDegrees(inches);
 
-  while (pros::millis() - startTime < timeout) {
-    updateOdometry();
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
 
-    float dx = targetX - x;
-    float dy = targetY - y;
-    float distance = sqrt(dx * dx + dy * dy);
+    left_motor_group.move_relative(targetDegrees, speed);
+    right_motor_group.move_relative(targetDegrees, speed - 10.5);
 
-    float targetHeading = atan2(dy, dx) * (180.0 / PI);
-    float headingError = targetHeading - heading;
-    while (headingError > 180) headingError -= 360;
-    while (headingError < -180) headingError += 360;
+    // Wait until both motor groups reach the target
+    while (std::abs(left_motor_group.get_position()) < targetDegrees &&
+           std::abs(right_motor_group.get_position()) < targetDegrees) {
+        //pros::delay(10);
+    }
 
-    // Tunable gains
-    float kP_drive = 5.0;
-    float kP_turn = 2.0;
-
-    float driveSpeed = std::clamp(distance * kP_drive, 30.0f, baseSpeed);
-    float correction = kP_turn * headingError;
-
-    left_motor_group.move(driveSpeed - correction);
-    right_motor_group.move(driveSpeed + correction);
-
-    if (distance < 1.0 && fabs(headingError) < 5.0) break;
-    pros::delay(20);
-  }
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
 }
 
 
-void turnToAngle(float targetHeading, float baseSpeed = 80, int timeout = 3000) {
-  int start = pros::millis();
-
-  while (pros::millis() - start < timeout) {
-    updateOdometry();
-
-    float headingError = targetHeading - heading;
-    while (headingError > 180) headingError -= 360;
-    while (headingError < -180) headingError += 360;
-
-    if (fabs(headingError) < 2.0) break; // within tolerance
-
-    float kP_turn = 2.0;
-    float turnSpeed = std::clamp(headingError * kP_turn, -baseSpeed, baseSpeed);
-
-    left_motor_group.move(-turnSpeed);
-    right_motor_group.move(turnSpeed);
-
-    pros::delay(20);
-  }
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
-}
-
-void driveArc(float radius, float angle, float baseSpeed = 80, bool leftArc = true) {
-  // arc length = radius * angle (in radians)
-  float arcLength = radius * (angle * (PI / 180.0));
-
-  // wheelbase width (distance between wheels) — set for your robot
-  const float wheelbase = 25.0; // cm or whatever unit you use
-
-  float innerArc = arcLength * (radius - (wheelbase / 2)) / radius;
-  float outerArc = arcLength * (radius + (wheelbase / 2)) / radius;
-
-  float ratio = innerArc / outerArc;
-
-  if (leftArc) {
-    left_motor_group.move(baseSpeed * ratio);
-    right_motor_group.move(baseSpeed);
-  } else {
-    left_motor_group.move(baseSpeed);
-    right_motor_group.move(baseSpeed * ratio);
-  }
-
-  // run for estimated duration (naive version)
-  int duration = (arcLength / baseSpeed) * 1000; 
-  pros::delay(duration);
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
-}
-
-void driveToPointBackward(float targetX, float targetY, float baseSpeed, int timeout = 5000) {
-  int startTime = pros::millis();
-
-  while (pros::millis() - startTime < timeout) {
-    updateOdometry();
-
-    float dx = targetX - x;
-    float dy = targetY - y;
-    float distance = sqrt(dx * dx + dy * dy);
-
-    float targetHeading = atan2(dy, dx) * (180.0 / PI);
-    float headingError = targetHeading - heading;
-    while (headingError > 180) headingError -= 360;
-    while (headingError < -180) headingError += 360;
-
-    // flip direction for reverse driving
-    headingError += 180;
-    while (headingError > 180) headingError -= 360;
-    while (headingError < -180) headingError += 360;
-
-    float kP_drive = 5.0;
-    float kP_turn = 2.0;
-
-    float driveSpeed = -std::clamp(distance * kP_drive, 30.0f, baseSpeed); // negative speed
-    float correction = kP_turn * headingError;
-
-    left_motor_group.move(driveSpeed - correction);
-    right_motor_group.move(driveSpeed + correction);
-
-    if (distance < 1.0 && fabs(headingError) < 5.0) break;
-    pros::delay(20);
-  }
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
-}
-
-void driveForward(float distance, float maxSpeed) {
-  // Compute target point based on current heading
-  float targetX = x + distance * cos(heading * PI / 180.0);
-  float targetY = y + distance * sin(heading * PI / 180.0);
-
-  int startTime = pros::millis();
-  int timeout = 5000; // safety timeout
-
-  while (pros::millis() - startTime < timeout) {
-    updateOdometry();
-
-    float dx = targetX - x;
-    float dy = targetY - y;
-    float remaining = sqrt(dx * dx + dy * dy); // inches left
-
-    if (remaining < 0.5) break; // stop when close
-
-    // 🔹 Scale speed down as it nears target
-    float kP = 20.0;                       // tune this gain
-    float driveSpeed = std::min(remaining * kP, maxSpeed);
-    driveSpeed = std::max(driveSpeed, 30.0f); // don’t go too slow
-
-    left_motor_group.move(driveSpeed);
-    right_motor_group.move(driveSpeed);
-
-    pros::delay(20);
-  }
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
-}
-
-void driveBackward(float distance, float maxSpeed) {
-  // Compute target point behind the robot
-  float targetX = x - distance * cos(heading * PI / 180.0);
-  float targetY = y - distance * sin(heading * PI / 180.0);
-
-  int startTime = pros::millis();
-  int timeout = 5000; // safety timeout in ms
-
-  while (pros::millis() - startTime < timeout) {
-    updateOdometry();
-
-    float dx = targetX - x;
-    float dy = targetY - y;
-    float remaining = sqrt(dx * dx + dy * dy); // inches left
-
-    if (remaining < 0.5) break; // stop when close
-
-    // 🔹 Scale speed down as it nears target
-    float kP = 20.0;                       
-    float driveSpeed = std::min(remaining * kP, maxSpeed);
-    driveSpeed = std::max(driveSpeed, 30.0f); // minimum speed
-
-    // Negative because we are driving backward
-    left_motor_group.move(-driveSpeed);
-    right_motor_group.move(-driveSpeed);
-
-    pros::delay(20);
-  }
-
-  left_motor_group.move(0);
-  right_motor_group.move(0);
-}
-
-
-
+// --- Initialize ---
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
     discore.move_absolute(-400, 100);
 
-    // Make tasks static so they persist
     static pros::Task odoTask(odometryTask);
 
     static pros::Task screen_task([]() {
-        // --- LAYOUT CONSTANTS ---
-        const int P_X = 240;       // Panel Start X (Middle of screen)
-        const int P_W = 240;       // Panel Width
-        const int BG_COLOR = 0x202020; 
+        const int P_X = 240;
+        const int P_W = 240;
+        const int BG_COLOR = 0x202020;
 
         while (true) {
-            // 1. CLEAR DASHBOARD AREA (Prevent ghosting)
             pros::screen::set_pen(BG_COLOR);
             pros::screen::fill_rect(P_X, 0, 480, 240);
 
-            // ==========================================
-            // ROW 1: BATTERY STATUS (Top)
-            // ==========================================
             double bat = pros::battery::get_capacity();
-            int bat_y = 20;       // Row Y position
-            int bat_h = 30;       // Icon Height
-            int bat_w = 70;       // Icon Width
-            int icon_x = P_X + 130; // Icon X position
+            int bat_y = 20;
+            int bat_h = 30;
+            int bat_w = 70;
+            int icon_x = P_X + 130;
 
-            // Text: "BAT: 99%"
-            // Alignment: Offset Y by +5 pixels to center with the 30px tall icon
             pros::screen::set_pen(0xFFFFFF);
             pros::screen::print(pros::E_TEXT_LARGE, P_X + 10, bat_y + 3, "BAT: %3.0f%%", bat);
 
-            // Graphic: Battery Body
-            uint32_t bat_col = (bat > 60) ? 0x00FFFF : (bat > 30 ? 0xFFA500 : 0xFF0000); // Cyan/Orange/Red
-            pros::screen::set_pen(0xFFFFFF); // White Border
+            uint32_t bat_col = (bat > 60) ? 0x00FFFF : (bat > 30 ? 0xFFA500 : 0xFF0000);
+            pros::screen::set_pen(0xFFFFFF);
             pros::screen::draw_rect(icon_x, bat_y, icon_x + bat_w, bat_y + bat_h);
-            
-            // Graphic: Positive Terminal (Nub)
             pros::screen::fill_rect(icon_x + bat_w, bat_y + 8, icon_x + bat_w + 5, bat_y + bat_h - 8);
 
-            // Graphic: Fill Level
-            // -2 padding so it fits inside the white border
             int fill = (int)((bat / 100.0) * (bat_w - 4));
             pros::screen::set_pen(bat_col);
             pros::screen::fill_rect(icon_x + 2, bat_y + 2, icon_x + 2 + fill, bat_y + bat_h - 2);
 
-
-            // ==========================================
-            // ROWS 2-5: MOTOR STRESS (Grid System)
-            // ==========================================
-            // We use a helper lambda to keep alignment identical for every row
             auto drawRow = [&](int row_idx, const char* label, double temp) {
-                int row_h = 40;            // Height of each row space
-                int start_y = 70;          // Y position where motor list starts
+                int row_h = 40;
+                int start_y = 70;
                 int y = start_y + (row_idx * row_h);
-                
-                // 1. LABEL (Left Aligned)
-                // Offset Y by +8 to vertically center with the bar
-                pros::screen::set_pen(0xFFFFFF); 
+
+                pros::screen::set_pen(0xFFFFFF);
                 pros::screen::print(pros::E_TEXT_MEDIUM, P_X + 10, y + 8, label);
 
-                // 2. STRESS BAR (Center)
-                // Max safe temp ~60C. 
-                int bar_x = P_X + 80;      // Start X (Leaving 70px for text)
-                int bar_w = 100;           // Max Width
-                int bar_h = 16;            // Bar Height
-                int bar_y = y + 6;         // Bar Y (Pushed down to center)
+                int bar_x = P_X + 80;
+                int bar_w = 100;
+                int bar_h = 16;
+                int bar_y = y + 6;
 
-                // Draw Empty Track (Dark Grey)
-                pros::screen::set_pen(0x404040); 
+                pros::screen::set_pen(0x404040);
                 pros::screen::fill_rect(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h);
 
-                // Draw Active Stress (Color Coded)
                 double stress = temp / 60.0;
                 if(stress > 1.0) stress = 1.0;
                 int fill_w = (int)(stress * bar_w);
-                
-                uint32_t col = 0x00FF00; // Green
-                if(temp > 45) col = 0xFFA500; // Orange
-                if(temp > 55) col = 0xFF0000; // Red
+
+                uint32_t col = 0x00FF00;
+                if(temp > 45) col = 0xFFA500;
+                if(temp > 55) col = 0xFF0000;
 
                 pros::screen::set_pen(col);
                 pros::screen::fill_rect(bar_x, bar_y, bar_x + fill_w, bar_y + bar_h);
 
-                // 3. NUMBER VALUE (Right Aligned)
-                // Offset Y by +10 for Small text alignment
                 pros::screen::set_pen(0xFFFFFF);
                 pros::screen::print(pros::E_TEXT_SMALL, bar_x + bar_w + 10, y + 8, "%.0fC", temp);
             };
 
-            // Calculate Avg Drive Temp
-            double d_temp = 0;
-            d_temp += left_motor_group.get_temperature();
-            d_temp += right_motor_group.get_temperature();
-            d_temp /= 2.0;
+            double d_temp = (left_motor_group.get_temperature() + right_motor_group.get_temperature()) / 2.0;
 
-            // Draw Rows
             drawRow(0, "Drive",  d_temp);
             drawRow(1, "Cata",   catapult_arm.get_temperature());
             drawRow(2, "Intake", intake.get_temperature());
             drawRow(3, "Load",   matchloader.get_temperature());
 
-            // Loop Delay
             pros::delay(200);
         }
     });
 }
 
+// --- Operator Control ---
 void opcontrol() {
-    // For Matchloader cycling logic
-    const int FORWARD_VELOCITY = 200; 
-    const int REVERSE_VELOCITY = -200; 
-    static bool isSpinningForward = false; 
-    static bool isSpinningBackward = false; 
-    
-    // NEW: Drivetrain Reversal State
-    static bool controlsReversed = false; 
-    // This variable tracks if the controls should be reversed (driving backward/reverse tank).
+    const int MAX_SPEED = 127;
+    static bool controlsReversed = false;
 
     while (true) {
-        // --- 1. Get Controller Input ---
-        
-        // Intake/Matchloader controls
         bool intakeForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
         bool intakeReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
         bool intakePause = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
-        
-        // Catapult/Arm controls
+        bool auton = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
+
         bool catapultArm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
         bool discoreDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
         bool discoreUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
-        
-        // Matchloader control using new press detection for cycling
+
         bool matchLoadUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B); 
         bool matchLoadDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
-        
-        // NEW: Down button tap detection for reversing controls
+
         bool reverseControlTap = controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN);
 
-        // Drivetrain Joystick values
-        // Note: 'move' is already negative for forward movement
         int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
         int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
-        
-        // Max speed for clamping
-        const int MAX_SPEED = 127;
 
-        // --- 2. Drivetrain Control (Tank Drive with Toggle) ---
-        
-        // Toggle the reversal state on a tap of the DOWN button
-        if (reverseControlTap) {
-            controlsReversed = !controlsReversed;
-        }
+        if (reverseControlTap) controlsReversed = !controlsReversed;
+        if(auton) autonomous();
 
-        // Apply reversal logic
-        if (controlsReversed) {
-            // Reverse movement: Forward stick input now drives backward, and vice-versa.
-            // Also reverse turning direction relative to the chassis by flipping 'turn'.
-            move = -move; 
-            turn = turn;
-        }
-        
-        // Calculate final motor speeds
-        int leftMotorSpeed = move + turn;
-        int rightMotorSpeed = move - turn;
+        if (controlsReversed) move = -move;
 
-        // Clamp values so they don’t exceed -127 to 127
-        leftMotorSpeed = std::clamp(leftMotorSpeed, -MAX_SPEED, MAX_SPEED);
-        rightMotorSpeed = std::clamp(rightMotorSpeed, -MAX_SPEED, MAX_SPEED);
+        int leftMotorSpeed = std::clamp(move + turn, -MAX_SPEED, MAX_SPEED);
+        int rightMotorSpeed = std::clamp(move - turn, -MAX_SPEED, MAX_SPEED);
 
-        // Drive motors
         left_motor_group.move(leftMotorSpeed);
         right_motor_group.move(rightMotorSpeed);
-        
-        // --- 3. Catapult/Arm Control ---
 
-        if (catapultArm) { // Assuming catapultArm is R1
-            catapult_arm.move_absolute(-600, 400);
-        } else {
-            catapult_arm.move_absolute(0, 400);
-        }
+        if (catapultArm) catapult_arm.move_absolute(-600, 400);
+        else catapult_arm.move_absolute(0, 400);
 
-        if (discoreDown) {
-            // Move freely down (no braking)
-            discore.move_velocity(0);
-        }
+        if (discoreDown) discore.move_velocity(0);
+        else if (discoreUp) discore.move_absolute(-400, 60);
 
-        else if (discoreUp) {
-            // Use HOLD or BRAKE so it stops properly when going up
-            discore.move_absolute(-400, 60);
-        }
+        if (matchLoadUp && !matchLoadDown) matchloader.move_absolute(1600, 100);
+        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(0, 100);
 
-        // --- 4. Matchloader Control (Toggled Cycling Logic) ---
-        
-        if (matchLoadUp && !matchLoadDown) {
-          matchloader.move_absolute(1400, 100);
-        }else if (matchLoadDown && !matchLoadUp) {
-          matchloader.move_absolute(0, 100);
-        }
-        
-        // --- 5. Intake Control ---
+        if (intakeForward && !intakeReverse) intake.move_velocity(200);
+        else if (intakeReverse && !intakeForward) intake.move_velocity(-200);
+        if (intakePause) intake.move_velocity(0);
 
-        if (intakeForward && !intakeReverse) {
-            intake.move_velocity(200);
-        } else if (intakeReverse && !intakeForward) {
-            intake.move_velocity(-200);
-        }
-
-        if (intakePause) {
-            intake.move_velocity(0);
-        }
-
-        // --- 6. Loop Delay ---
-        pros::delay(20); // loop delay (20ms is standard for PROS)
+        pros::delay(20);
     }
 }
 
+// --- Autonomous ---
 void autonomous() {
-  // // Start facing 0°, at (0,0)
-  // // 1. Drive forward to (50,30)
-  // driveToPoint(50, 30, 100);
-  // // 2. Turn right to face 90°
-  // turnToAngle(90, 80);
-  // // 3. Drive an arc left (like a smooth turn)
-  // driveArc(40, 90, 70, true);
-  // // 4. Back into target zone
-  // driveToPointBackward(20, 20, 80);
-
-  // driveForward(15, 100);
-  // turnToAngle(45);
-  // driveForward(2, 100);
-  // outtake.move_velocity(600);
-  // pros::delay(2000);
-  // outtake.move_velocity(0);
-  // driveArc(40, 90, 70, true);
-  // outtake.move_velocity(-600);
-  // pros::delay(2000);
-  // outtake.move_velocity(0);
-  // turnToAngle(360);
-  // driveForward(12, 100);
-  // turnToAngle(45);
-  // driveForward(5, 100);
-  // outtake.move_velocity(600);
-  // pros::delay(3000);
-  // outtake.move_velocity(0);
-  // turnToAngle(360);
-  // driveForward(12, 100);
-  // moveArm1ToAngle(ARM1_LEVEL3_ANGLE, 150);
-  // outtake.move_velocity(-600);
-  // conveyor.move_velocity(-200);
-  // pros::delay(3000);
-  
+    drive_for_inches(100, 24); // Drive forward 24 inches at speed 100
 }
-
-  
