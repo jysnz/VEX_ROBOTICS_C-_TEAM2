@@ -17,6 +17,7 @@ double x = 0.0, y = 0.0, theta = 0.0, heading = 0.0;
 const double wheelDiameter = 3.25; // inches
 const double trackWidth = 12.0;    // distance between wheels
 const double ticksPerRev = 360.0;  // motor degrees per revolution
+double turnCalibration = 1.80;
 
 const float PI = 3.14159;
 
@@ -83,6 +84,8 @@ float ticksToInches(float ticks) {
   return (ticks / ticksPerRev) * PI * wheelDiameter;
 }
 
+
+
 void updateOdometry() {
   float leftDist = ticksToInches(left_motor_group.get_position());
   float rightDist = ticksToInches(right_motor_group.get_position());
@@ -106,13 +109,21 @@ void odometryTask() {
   }
 }
 
-void moveCatapultArmUp(double angle, int velocity = 100) {
-  catapult_arm.move_absolute(angle, velocity);
+double turnDegrees(double robotAngle) {
+    double wheelCircumference = M_PI * wheelDiameter;
+
+    // Arc length each wheel must travel
+    double arcLength = M_PI * trackWidth * (robotAngle / 360.0);
+
+    // Convert arc length to motor degrees
+    double wheelRevolutions = arcLength / wheelCircumference;
+    double motorDegrees = wheelRevolutions * ticksPerRev;
+
+    return motorDegrees * turnCalibration;
 }
 
-void moveCatapultArmDown(double angle, int velocity = 100) {
-  catapult_arm.move_absolute(angle, velocity);
-}
+
+
 
 // --- New drive_for_inches function ---
 double inchesToDegrees(double inches) {
@@ -121,19 +132,97 @@ double inchesToDegrees(double inches) {
     return rotations * 360.0; // degrees
 }
 
-void drive_for_inches(double speed, double inches) {
+void drive_for_inches(double maxSpeed, double inches) {
     double targetDegrees = inchesToDegrees(inches);
 
     left_motor_group.tare_position();
     right_motor_group.tare_position();
 
-    left_motor_group.move_relative(targetDegrees, speed);
-    right_motor_group.move_relative(targetDegrees, speed - 10.5);
+    const double accelRate = 2.0;
+    const double decelStart = 0.6;
 
-    // Wait until both motor groups reach the target
-    while (std::abs(left_motor_group.get_position()) < targetDegrees &&
-           std::abs(right_motor_group.get_position()) < targetDegrees) {
-        //pros::delay(10);
+    double currentSpeed = 0;
+    double decelPoint = targetDegrees * decelStart;
+
+    while (true) {
+        double leftPos  = std::abs(left_motor_group.get_position());
+        double rightPos = std::abs(right_motor_group.get_position());
+        double avgPos   = (leftPos + rightPos) / 2.0;
+
+        // ACCELERATION
+        if (avgPos < decelPoint) {
+            currentSpeed += accelRate;
+            if (currentSpeed > maxSpeed)
+                currentSpeed = maxSpeed;
+        }
+        // DECELERATION
+        else {
+            double remaining = targetDegrees - avgPos;
+            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
+            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
+        }
+
+        // END CONDITION
+        if (avgPos >= targetDegrees - 2) break;
+
+        left_motor_group.move_velocity(currentSpeed);
+        right_motor_group.move_velocity(currentSpeed);
+
+        pros::delay(10);
+    }
+
+    // ----- SMOOTH FINAL STOP -----
+    double lastSpeed = std::max(currentSpeed, 10.0); // start ramp-down from current speed
+    while (lastSpeed > 0) {
+        left_motor_group.move_velocity(lastSpeed);
+        right_motor_group.move_velocity(lastSpeed);
+        lastSpeed -= 2;           // small decrement for smooth stop
+        if (lastSpeed < 0) lastSpeed = 0;
+        pros::delay(10);
+    }
+
+    // Hard stop
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+}
+
+
+void turn_right(double speed, double angle) {
+    double deg = turnDegrees(angle);
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    // Left side forward, right side backward
+    left_motor_group.move_relative(deg, speed);
+    right_motor_group.move_relative(-deg, speed);
+
+    // Wait until both sides reach target
+    while (std::abs(left_motor_group.get_position()) < std::abs(deg) &&
+           std::abs(right_motor_group.get_position()) < std::abs(deg)) {
+        pros::delay(10);
+    }
+
+    // Stop
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+}
+
+
+void turn_left(double speed, double angle) {
+    double deg = turnDegrees(angle);
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    // Left backward, right forward
+    left_motor_group.move_relative(-deg, speed);
+    right_motor_group.move_relative(deg, speed);
+
+    // Wait until both sides reach target
+    while (std::abs(left_motor_group.get_position()) < std::abs(deg) &&
+           std::abs(right_motor_group.get_position()) < std::abs(deg)) {
+        pros::delay(10);
     }
 
     left_motor_group.move_velocity(0);
@@ -146,6 +235,7 @@ void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
     discore.move_absolute(-400, 100);
+    matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
     static pros::Task odoTask(odometryTask);
 
@@ -272,5 +362,41 @@ void opcontrol() {
 
 // --- Autonomous ---
 void autonomous() {
-    drive_for_inches(100, 24); // Drive forward 24 inches at speed 100
+    drive_for_inches(100, 5); // Drive forward 24 inches at speed 100
+    pros::delay(200);
+
+    //Score to lower center goal the payload
+    intake.move_velocity(-200);
+    pros::delay(1200);
+
+    //Go to matchload
+    drive_for_inches(100, -10);
+    turn_left(100, 45);
+    matchloader.move_absolute(1600, 100);
+    drive_for_inches(100, 5);
+    intake.move_velocity(200);
+    pros::delay(5000);
+
+    //Score to long goal
+    drive_for_inches(100, -5);
+    catapult_arm.move_absolute(-600, 400);
+
+    //Adjust the balls to the control zone
+    drive_for_inches(100, 5);
+    turn_left(100, 45);
+    discore.move_absolute(-400, 60);
+    drive_for_inches(100, 5);
+    turn_right(100, 45);
+    discore.move_velocity(0);
+    drive_for_inches(100, 4);
+    discore.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
+    //Pause
+    pros::delay(15000);
+
+    //Park
+    discore.move_velocity(0);
+    drive_for_inches(100, 12);
+    turn_left(100, 45);
+    drive_for_inches(200, 5);
 }
