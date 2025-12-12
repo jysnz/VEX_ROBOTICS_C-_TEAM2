@@ -109,22 +109,60 @@ void odometryTask() {
     pros::delay(10);
   }
 }
+double swingTurnDegrees(double angle) {
+    // The stationary left wheels are the center of the arc.
+    // The right wheels travel an arc with a radius equal to the trackWidth (12.0 inches).
 
-double turnDegrees(double robotAngle) {
-    double wheelCircumference = M_PI * wheelDiameter;
+    // 1. Calculate the arc distance traveled by the moving (right) wheel:
+    // Arc Length = (angle / 360) * 2 * PI * Radius
+    // Radius = trackWidth
+    double radius = trackWidth;
+    double arc_distance = (angle / 360.0) * (2.0 * PI * radius);
 
-    // Arc length each wheel must travel
-    double arcLength = M_PI * trackWidth * (robotAngle / 360.0);
-
-    // Convert arc length to motor degrees
-    double wheelRevolutions = arcLength / wheelCircumference;
-    double motorDegrees = wheelRevolutions * ticksPerRev;
-
-    return motorDegrees * turnCalibration;
+    // 2. Convert this distance to required motor degrees:
+    double wheelCircumference = PI * wheelDiameter;
+    double rotations = arc_distance / wheelCircumference;
+    return rotations * ticksPerRev; 
 }
 
+// ======================================
+//   TURN LEFT (SWING TURN - Left Pivot)
+// ======================================
+void turn_left(double speed, double angle) {
+    // Calculate the target encoder degrees for the moving side (right)
+    double targetDeg = swingTurnDegrees(angle); 
 
+    // Set the left motor to hold its position
+    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    left_motor_group.move_velocity(0); // Ensure it starts stopped
 
+    right_motor_group.tare_position();
+
+    // Right motor moves forward (+) to the target
+    right_motor_group.move_relative(targetDeg, speed);
+
+    int startTime = pros::millis();
+    while (true) {
+        double rightPos = right_motor_group.get_position();
+        
+        // Check if the moving (right) motor is within tolerance of its target
+        bool right_done = std::abs(targetDeg - rightPos) < STOP_TOLERANCE;
+
+        if (right_done) break;
+
+        // Safety timeout (3 seconds)
+        if (pros::millis() - startTime > 3000) break;
+
+        pros::delay(10);
+    }
+    
+    // Explicitly stop the moving side
+    right_motor_group.move_velocity(0);
+    
+    // IMPORTANT: Reset the left motor brake mode if it needs to coast later
+    // You should probably set the default brake mode in initialize/opcontrol
+    // but for safety here, we'll leave it as HOLD so the robot doesn't drift.
+}
 
 // --- New drive_for_inches function ---
 double inchesToDegrees(double inches) {
@@ -187,6 +225,7 @@ void drive_for_inches(double maxSpeed, double inches) {
     right_motor_group.move_velocity(0);
 }
 
+
 void drive_backward_for_inches(double maxSpeed, double inches) {
     // targetDegrees is the magnitude of the rotation needed (always positive)
     double targetDegrees = inchesToDegrees(inches);
@@ -248,88 +287,6 @@ void drive_backward_for_inches(double maxSpeed, double inches) {
     }
 
     // Hard stop
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
-}
-
-
-void turn_right(double speed, double angle) {
-    double deg = turnDegrees(angle);
-    const double STOP_TOLERANCE = 5.0; 
-    
-    // Calculate the target positions
-    double targetLeft  = deg;
-    double targetRight = -deg;
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    // 1. Set Movement: Left forward, right backward
-    // This starts the internal PID controllers
-    left_motor_group.move_relative(deg, speed);
-    right_motor_group.move_relative(-deg, speed);
-
-    // 2. CORRECTED Wait Condition (Position Check with OR logic)
-    // Loop as long as EITHER motor is NOT within the tolerance of its target.
-    while (true) {
-        double currentLeft = left_motor_group.get_position();
-        double currentRight = right_motor_group.get_position();
-
-        // Check if the left motor is close to its target
-        bool leftFinished = std::abs(targetLeft - currentLeft) < STOP_TOLERANCE;
-        
-        // Check if the right motor is close to its target
-        bool rightFinished = std::abs(targetRight - currentRight) < STOP_TOLERANCE;
-
-        // Exit loop ONLY when BOTH motors are finished
-        if (leftFinished && rightFinished) {
-            break;
-        }
-
-        pros::delay(10);
-    }
-
-    // 3. Hard stop
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
-}
-
-
-void turn_left(double speed, double angle) {
-    double deg = turnDegrees(angle);
-    const double STOP_TOLERANCE = 5.0; 
-    
-    // Calculate the target positions
-    double targetLeft  = -deg;
-    double targetRight = deg;
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    // 1. Set Movement: Left backward, right forward
-    left_motor_group.move_relative(targetLeft, speed);
-    right_motor_group.move_relative(targetRight, speed);
-
-    // 2. CORRECTED Wait Condition (Position Check with OR logic)
-    while (true) {
-        double currentLeft = left_motor_group.get_position();
-        double currentRight = right_motor_group.get_position();
-
-        // Check if the left motor is close to its target
-        bool leftFinished = std::abs(targetLeft - currentLeft) < STOP_TOLERANCE;
-        
-        // Check if the right motor is close to its target
-        bool rightFinished = std::abs(targetRight - currentRight) < STOP_TOLERANCE;
-
-        // Exit loop ONLY when BOTH motors are finished
-        if (leftFinished && rightFinished) {
-            break;
-        }
-
-        pros::delay(10);
-    }
-
-    // 3. Hard stop
     left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
 }
@@ -472,16 +429,32 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    // drive_for_inches(80, 22); // Drive forward 24 inches at speed 100
-    // pros::delay(200);
-    right_motor_group.move_absolute(400, 100);
+    matchloader.move_absolute(-1700, 100);
+    drive_for_inches(80, 21); // Drive forward 24 inches at speed 100
+   
+    right_motor_group.move(100);
+    pros::delay(280);
+    right_motor_group.move(0);
+
+    // //Score to lower center goal the payload
+    intake.move_velocity(180);
+    pros::delay(2500);
+    intake.move_velocity(0);
+    drive_backward_for_inches(80, 15);
 
 
-    //Score to lower center goal the payload
-    // intake.move_velocity(180);
-    // pros::delay(1200);
-    // intake.move_velocity(0);
-    // drive_backward_for_inches(80, 23);
+    matchloader.move_absolute(0, 100);
+    left_motor_group.move(-100);
+    pros::delay(740);
+    left_motor_group.move(0);
+
+    drive_for_inches(80, 6);
+    intake.move_velocity(-180);
+    pros::delay(6000);
+    intake.move_velocity(0);
+
+
+
 
     //Move to matchload
 
