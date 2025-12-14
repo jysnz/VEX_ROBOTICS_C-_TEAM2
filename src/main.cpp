@@ -291,6 +291,29 @@ void drive_backward_for_inches(double maxSpeed, double inches) {
     right_motor_group.move_velocity(0);
 }
 
+void drive_back_and_forth(double times, double speed, double seconds){
+    for(int i = 0; i < times; i++){
+        left_motor_group.move(-speed);
+        right_motor_group.move(-speed);
+        pros::delay(seconds);
+        left_motor_group.move(speed);
+        right_motor_group.move(speed);
+        pros::delay(seconds);
+    }
+}
+
+void turn_right(double ms){
+    left_motor_group.move(200);
+    pros::delay(ms);
+    left_motor_group.move(0);
+}
+
+void turn_left(double ms){
+    right_motor_group.move(200);
+    pros::delay(ms);
+    right_motor_group.move(0);
+}
+
 // --- Initialize ---
 void initialize() {
     pros::lcd::initialize();
@@ -429,64 +452,44 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
+    //Move to lower center goal
     matchloader.move_absolute(-1700, 100);
-    drive_for_inches(80, 21); // Drive forward 24 inches at speed 100
-   
+    drive_for_inches(80, 21.5); 
+
+    //Turn left to lower center goal
     right_motor_group.move(100);
-    pros::delay(280);
+    pros::delay(270);
     right_motor_group.move(0);
 
-    // //Score to lower center goal the payload
-    intake.move_velocity(180);
-    pros::delay(2500);
+    //Score to lower center goal the payload
+    intake.move_velocity(100);
+    pros::delay(2000);
     intake.move_velocity(0);
-    drive_backward_for_inches(80, 15);
-
-
-    matchloader.move_absolute(0, 100);
-    left_motor_group.move(-100);
-    pros::delay(740);
-    left_motor_group.move(0);
-
-    drive_for_inches(80, 6);
-    intake.move_velocity(-180);
-    pros::delay(6000);
-    intake.move_velocity(0);
-
-
-
 
     //Move to matchload
+    drive_backward_for_inches(80, 16);
+    matchloader.move_absolute(0, 100);
 
+    //Turn left to face the matchload
+    left_motor_group.move(-100);
+    pros::delay(720);
+    left_motor_group.move(0);
 
-    // //Go to matchload
-    // drive_for_inches(100, -10);
-    // turn_left(100, 45);
-    // matchloader.move_absolute(1600, 100);
-    // drive_for_inches(100, 5);
-    // intake.move_velocity(200);
-    // pros::delay(5000);
+    //Get the matchload
+    drive_for_inches(80, 9.5);
+    intake.move_velocity(-200);
+    discore.move_absolute(-650, 200);
+    drive_back_and_forth(13,40, 180);
+    pros::delay(1000);
+    intake.move_velocity(0);
 
-    // //Score to long goal
-    // drive_for_inches(100, -5);
-    // catapult_arm.move_absolute(-600, 400);
+    //Score to long goal
+    drive_backward_for_inches(60, 13);
+    pros::delay(1000);
+    catapult_arm.move_absolute(-300, 400);
+    discore.move_velocity(0);
 
-    // //Adjust the balls to the control zone
-    // drive_for_inches(100, 5);
-    // turn_left(100, 45);
-    // discore.move_absolute(-400, 60);
-    // drive_for_inches(100, 5);
-    // turn_right(100, 45);
-    // discore.move_velocity(0);
-    // drive_for_inches(100, 4);
-    // discore.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    //Backward to face the matchload
+    drive_backward_for_inches(100, 7);
 
-    // //Pause
-    // pros::delay(15000);
-
-    // //Park
-    // discore.move_velocity(0);
-    // drive_for_inches(100, 12);
-    // turn_left(100, 45);
-    // drive_for_inches(200, 5);
 }
