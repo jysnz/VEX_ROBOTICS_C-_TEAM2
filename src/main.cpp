@@ -8,19 +8,18 @@
 #include <algorithm>
 #include <cmath>
 
-ASSET(path_jerryio_txt);
+// ================= ODOMETRY STATE =================
+double odom_x = 0.0;      // inches
+double odom_y = 0.0;      // inches
+double odom_theta = 0.0;  // radians
 
-// --- Robot state ---
-double x = 0.0, y = 0.0, theta = 0.0, heading = 0.0;
+double last_left_inches = 0.0;
+double last_right_inches = 0.0;
 
-// --- Constants ---
-const double wheelDiameter = 3.25; // inches
-const double trackWidth = 12.0;    // distance between wheels
-const double ticksPerRev = 360.0;  // motor degrees per revolution
-double turnCalibration = 1.80;
-const double STOP_TOLERANCE = 5.0; // Stop when within +/- 5 motor degrees of the target
-
-const float PI = 3.14159;
+// ================= CONSTANTS =================
+constexpr double WHEEL_DIAMETER = 3.25;
+constexpr double TRACK_WIDTH = 12.0;
+constexpr double PI = 3.1415926535;
 
 // PID constants
 float kP = 1.0;
@@ -80,238 +79,166 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
 double prevLeft = 0.0;
 double prevRight = 0.0;
 
-// --- Helper functions ---
-float ticksToInches(float ticks) {
-  return (ticks / ticksPerRev) * PI * wheelDiameter;
+double motorClamp(double value) {
+    if (value > 127) return 127;
+    if (value < -127) return -127;
+    return value;
 }
 
+struct PID {
+    double kP, kI, kD;
+    double integral = 0;
+    double lastError = 0;
+
+    double step(double error) {
+        integral += error;
+        double derivative = error - lastError;
+        lastError = error;
+        return kP * error + kI * integral + kD * derivative;
+    }
+
+    void reset() {
+        integral = 0;
+        lastError = 0;
+    }
+};
 
 
-void updateOdometry() {
-  float leftDist = ticksToInches(left_motor_group.get_position());
-  float rightDist = ticksToInches(right_motor_group.get_position());
-  float distance = (leftDist + rightDist) / 2.0;
-  float deltaTheta = (rightDist - leftDist) / trackWidth;
-
-  heading += deltaTheta * (180.0 / PI); // degrees
-  x += distance * cos(heading * PI / 180.0);
-  y += distance * sin(heading * PI / 180.0);
+double degreesToInches(double deg) {
+    return (deg / 360.0) * PI * WHEEL_DIAMETER;
 }
 
-void odometryTask() {
-  left_motor_group.tare_position();
-  right_motor_group.tare_position();
-  prevLeft = 0;
-  prevRight = 0;
+void update_odometry() {
+    double left_deg  = left_motor_group.get_position();
+    double right_deg = right_motor_group.get_position();
 
-  while (true) {
-    updateOdometry();
-    pros::delay(10);
-  }
-}
-double swingTurnDegrees(double angle) {
-    // The stationary left wheels are the center of the arc.
-    // The right wheels travel an arc with a radius equal to the trackWidth (12.0 inches).
+    double left_inches  = degreesToInches(left_deg);
+    double right_inches = degreesToInches(right_deg);
 
-    // 1. Calculate the arc distance traveled by the moving (right) wheel:
-    // Arc Length = (angle / 360) * 2 * PI * Radius
-    // Radius = trackWidth
-    double radius = trackWidth;
-    double arc_distance = (angle / 360.0) * (2.0 * PI * radius);
+    double dL = left_inches  - last_left_inches;
+    double dR = right_inches - last_right_inches;
 
-    // 2. Convert this distance to required motor degrees:
-    double wheelCircumference = PI * wheelDiameter;
-    double rotations = arc_distance / wheelCircumference;
-    return rotations * ticksPerRev; 
+    last_left_inches  = left_inches;
+    last_right_inches = right_inches;
+
+    double dS = (dL + dR) / 2.0;
+    double dTheta = (dR - dL) / TRACK_WIDTH;
+
+    odom_theta += dTheta;
+
+    odom_x += dS * cos(odom_theta);
+    odom_y += dS * sin(odom_theta);
 }
 
-// ======================================
-//   TURN LEFT (SWING TURN - Left Pivot)
-// ======================================
-void turn_left(double speed, double angle) {
-    // Calculate the target encoder degrees for the moving side (right)
-    double targetDeg = swingTurnDegrees(angle); 
-
-    // Set the left motor to hold its position
-    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-    left_motor_group.move_velocity(0); // Ensure it starts stopped
-
+void odom_task(void*) {
+    left_motor_group.tare_position();
     right_motor_group.tare_position();
 
-    // Right motor moves forward (+) to the target
-    right_motor_group.move_relative(targetDeg, speed);
+    last_left_inches = 0;
+    last_right_inches = 0;
 
-    int startTime = pros::millis();
     while (true) {
+        update_odometry();
+        pros::delay(10);
+    }
+}
+
+void drive_straight_pid(double inches, int maxSpeed, bool forward = true) {
+    PID distancePID{6.0, 0.0, 20.0};
+    PID driftPID{3.0, 0.0, 8.0};
+
+    double startX = odom_x;
+    double startY = odom_y;
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+    distancePID.reset();
+    driftPID.reset();
+
+    while (true) {
+        update_odometry();
+
+        double dx = odom_x - startX;
+        double dy = odom_y - startY;
+        double traveled = sqrt(dx * dx + dy * dy);
+        double error = inches - traveled;
+
+        if (fabs(error) < 0.3) break;
+
+        double speed = distancePID.step(error);
+        if (!forward) speed = -speed;
+
+        if (speed > maxSpeed) speed = maxSpeed;
+        if (speed < -maxSpeed) speed = -maxSpeed;
+
+        double leftPos  = left_motor_group.get_position();
         double rightPos = right_motor_group.get_position();
-        
-        // Check if the moving (right) motor is within tolerance of its target
-        bool right_done = std::abs(targetDeg - rightPos) < STOP_TOLERANCE;
+        double driftError = leftPos - rightPos;
 
-        if (right_done) break;
+        double correction = driftPID.step(driftError);
 
-        // Safety timeout (3 seconds)
-        if (pros::millis() - startTime > 3000) break;
-
-        pros::delay(10);
-    }
-    
-    // Explicitly stop the moving side
-    right_motor_group.move_velocity(0);
-    
-    // IMPORTANT: Reset the left motor brake mode if it needs to coast later
-    // You should probably set the default brake mode in initialize/opcontrol
-    // but for safety here, we'll leave it as HOLD so the robot doesn't drift.
-}
-
-// --- New drive_for_inches function ---
-double inchesToDegrees(double inches) {
-    double wheelCircumference = PI * wheelDiameter;
-    double rotations = inches / wheelCircumference;
-    return rotations * 360.0; // degrees
-}
-
-void drive_for_inches(double maxSpeed, double inches) {
-    double targetDegrees = inchesToDegrees(inches);
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    const double accelRate = 2.0;
-    const double decelStart = 0.6;
-
-    double currentSpeed = 0;
-    double decelPoint = targetDegrees * decelStart;
-
-    while (true) {
-        double leftPos  = std::abs(left_motor_group.get_position());
-        double rightPos = std::abs(right_motor_group.get_position());
-        double avgPos   = (leftPos + rightPos) / 2.0;
-
-        // ACCELERATION
-        if (avgPos < decelPoint) {
-            currentSpeed += accelRate;
-            if (currentSpeed > maxSpeed)
-                currentSpeed = maxSpeed;
-        }
-        // DECELERATION
-        else {
-            double remaining = targetDegrees - avgPos;
-            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
-            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
-        }
-
-        // END CONDITION
-        if (avgPos >= targetDegrees - 2) break;
-
-        left_motor_group.move_velocity(currentSpeed);
-        right_motor_group.move_velocity(currentSpeed);
+        left_motor_group.move(motorClamp(speed - correction));
+        right_motor_group.move(motorClamp(speed + correction));
 
         pros::delay(10);
     }
 
-    // ----- SMOOTH FINAL STOP -----
-    double lastSpeed = std::max(currentSpeed, 10.0); // start ramp-down from current speed
-    while (lastSpeed > 0) {
-        left_motor_group.move_velocity(lastSpeed);
-        right_motor_group.move_velocity(lastSpeed);
-        lastSpeed -= 2;           // small decrement for smooth stop
-        if (lastSpeed < 0) lastSpeed = 0;
-        pros::delay(10);
-    }
-
-    // Hard stop
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
-}
-
-
-void drive_backward_for_inches(double maxSpeed, double inches) {
-    // targetDegrees is the magnitude of the rotation needed (always positive)
-    double targetDegrees = inchesToDegrees(inches);
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    // Constant parameters
-    const double accelRate = 2.0;
-    const double decelStart = 0.6; // Start decelerating at 60% of the distance
-
-    double currentSpeed = 0;
-    double decelPoint = targetDegrees * decelStart;
-    
-    // We will use a negative speed command to move backward
-    double backwardSpeedCommand = 0.0;
-
-    while (true) {
-        // Use the absolute value for position tracking, as in the original function.
-        // This keeps the acceleration/deceleration logic simple and positive-based.
-        double leftPos  = std::abs(left_motor_group.get_position());
-        double rightPos = std::abs(right_motor_group.get_position());
-        double avgPos   = (leftPos + rightPos) / 2.0;
-
-        // ACCELERATION (same logic as forward)
-        if (avgPos < decelPoint) {
-            currentSpeed += accelRate;
-            if (currentSpeed > maxSpeed)
-                currentSpeed = maxSpeed;
-        }
-        // DECELERATION (same logic as forward)
-        else {
-            double remaining = targetDegrees - avgPos;
-            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
-            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
-        }
-
-        // Set the final speed command to be negative for backward movement
-        backwardSpeedCommand = -currentSpeed;
-
-        // END CONDITION
-        if (avgPos >= targetDegrees - 2) break; // Stop a little early
-
-        left_motor_group.move_velocity(backwardSpeedCommand);
-        right_motor_group.move_velocity(backwardSpeedCommand);
-
-        pros::delay(10);
-    }
-
-    // ----- SMOOTH FINAL STOP (Ramp down to 0) -----
-    // We ramp down the NEGATIVE speed towards 0
-    double lastSpeedCommand = std::min(backwardSpeedCommand, -10.0); // start ramp-down from current speed
-    while (lastSpeedCommand < 0) { // loop while the command is negative
-        left_motor_group.move_velocity(lastSpeedCommand);
-        right_motor_group.move_velocity(lastSpeedCommand);
-        lastSpeedCommand += 2;      // small POSITIVE increment to approach 0
-        if (lastSpeedCommand > 0) lastSpeedCommand = 0;
-        pros::delay(10);
-    }
-
-    // Hard stop
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
-}
-
-void drive_back_and_forth(double times, double speed, double seconds){
-    for(int i = 0; i < times; i++){
-        left_motor_group.move(-speed);
-        right_motor_group.move(-speed);
-        pros::delay(seconds);
-        left_motor_group.move(speed);
-        right_motor_group.move(speed);
-        pros::delay(seconds);
-    }
-}
-
-void turn_right(double ms){
-    left_motor_group.move(200);
-    pros::delay(ms);
     left_motor_group.move(0);
+    right_motor_group.move(0);
 }
 
-void turn_left(double ms){
-    right_motor_group.move(200);
-    pros::delay(ms);
+void turn_pid(double degrees, int maxSpeed, bool leftTurn = true) {
+    PID turnPID{5.0, 0.0, 30.0};
+    turnPID.reset();
+
+    double target = odom_theta +
+        (leftTurn ? 1 : -1) * degrees * (PI / 180.0);
+
+    while (true) {
+        update_odometry();
+
+        double error = target - odom_theta;
+
+        if (fabs(error) < (1.0 * PI / 180.0)) break;
+
+        double speed = turnPID.step(error);
+
+        if (speed > maxSpeed) speed = maxSpeed;
+        if (speed < -maxSpeed) speed = -maxSpeed;
+
+        left_motor_group.move(motorClamp(-speed));
+        right_motor_group.move(motorClamp(speed));
+
+        pros::delay(10);
+    }
+
+    left_motor_group.move(0);
     right_motor_group.move(0);
+}
+
+void drive_forward(double inches, int speed) {
+    drive_straight_pid(inches, speed, true);
+}
+
+void drive_backward(double inches, int speed) {
+    drive_straight_pid(inches, speed, false);
+}
+
+void turn_left(double degrees, int speed) {
+    turn_pid(degrees, speed, true);
+}
+
+void turn_right(double degrees, int speed) {
+    turn_pid(degrees, speed, false);
+}
+
+void drive_back_and_forth(double times, double inches, int speed) {
+    for (int i = 0; i < times; i++) {
+        drive_forward(inches, speed);
+        pros::delay(100);   // small settle delay (optional)
+        drive_backward(inches, speed);
+        pros::delay(100);
+    }
 }
 
 // --- Initialize ---
@@ -320,7 +247,7 @@ void initialize() {
     chassis.calibrate();
     matchloader.move_absolute(-1700, 100);
 
-    static pros::Task odoTask(odometryTask);
+    static pros::Task odomTask(odom_task);
 
     static pros::Task screen_task([]() {
         const int P_X = 240;
@@ -452,44 +379,44 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    //Move to lower center goal
-    matchloader.move_absolute(-1700, 100);
-    drive_for_inches(80, 21.5); 
+    // //Move to lower center goal
+    // matchloader.move_absolute(-1700, 100);
+    // drive_for_inches(80, 21.5); 
 
-    //Turn left to lower center goal
-    right_motor_group.move(100);
-    pros::delay(270);
-    right_motor_group.move(0);
+    // //Turn left to lower center goal
+    // right_motor_group.move(100);
+    // pros::delay(270);
+    // right_motor_group.move(0);
 
-    //Score to lower center goal the payload
-    intake.move_velocity(100);
-    pros::delay(2000);
-    intake.move_velocity(0);
+    // //Score to lower center goal the payload
+    // intake.move_velocity(100);
+    // pros::delay(2000);
+    // intake.move_velocity(0);
 
-    //Move to matchload
-    drive_backward_for_inches(80, 16);
-    matchloader.move_absolute(0, 100);
+    // //Move to matchload
+    // drive_backward_for_inches(80, 16);
+    // matchloader.move_absolute(0, 100);
 
-    //Turn left to face the matchload
-    left_motor_group.move(-100);
-    pros::delay(720);
-    left_motor_group.move(0);
+    // //Turn left to face the matchload
+    // left_motor_group.move(-100);
+    // pros::delay(720);
+    // left_motor_group.move(0);
 
-    //Get the matchload
-    drive_for_inches(80, 9.5);
-    intake.move_velocity(-200);
-    discore.move_absolute(-650, 200);
-    drive_back_and_forth(13,40, 180);
-    pros::delay(1000);
-    intake.move_velocity(0);
+    // //Get the matchload
+    // drive_for_inches(80, 9.5);
+    // intake.move_velocity(-200);
+    // discore.move_absolute(-650, 200);
+    // drive_back_and_forth(13,40, 180);
+    // pros::delay(1000);
+    // intake.move_velocity(0);
 
-    //Score to long goal
-    drive_backward_for_inches(60, 13);
-    pros::delay(1000);
-    catapult_arm.move_absolute(-300, 400);
-    discore.move_velocity(0);
+    // //Score to long goal
+    // drive_backward_for_inches(60, 13);
+    // pros::delay(1000);
+    // catapult_arm.move_absolute(-300, 400);
+    // discore.move_velocity(0);
 
-    //Backward to face the matchload
-    drive_backward_for_inches(100, 7);
+    // //Backward to face the matchload
+    // drive_backward_for_inches(100, 7);
 
 }
