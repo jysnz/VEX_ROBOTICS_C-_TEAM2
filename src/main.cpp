@@ -57,15 +57,15 @@ lemlib::TrackingWheel horizontal_tracking_wheel(&horizontal_encoder,
 lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder,
                                               lemlib::Omniwheel::NEW_325, -2.5);
 
-lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical wheel
+lemlib::OdomSensors sensors(nullptr, // vertical wheel
                             nullptr,                  // second vertical (none)
-                            &horizontal_tracking_wheel, // horizontal wheel
+                            nullptr, // horizontal wheel
                             nullptr, // second horizontal (none)
-                            &imu     // imu
+                            nullptr     // imu
 );
 
 // Lateral & Angular PID
-lemlib::ControllerSettings lateral_controller(10, 0, 3, 3, 1, 100, 3, 500, 20);
+lemlib::ControllerSettings lateral_controller(10, 0, 3, 3, 0, 100, 3, 500, 20);
 lemlib::ControllerSettings angular_controller(2, 0, 10, 0, 0, 0, 0, 0, 0);
 
 // Expo drive curves
@@ -188,7 +188,7 @@ void drive_straight_pid(double inches, int maxSpeed, bool forward = true) {
 }
 
 void turn_pid(double degrees, int maxSpeed, bool leftTurn = true) {
-    PID turnPID{5.0, 0.0, 30.0};
+    PID turnPID{75.0, 0.0, 30.0};
     turnPID.reset();
 
     double target = odom_theta +
@@ -379,23 +379,26 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    // //Move to lower center goal
-    // matchloader.move_absolute(-1700, 100);
-    // drive_for_inches(80, 21.5); 
-
-    // //Turn left to lower center goal
-    // right_motor_group.move(100);
-    // pros::delay(270);
-    // right_motor_group.move(0);
-
+    // 1. Set the robot's initial position and heading (e.g., x=0, y=0, heading=90 degrees)
+    chassis.setPose(0, 0, 90); 
+    
+    // Move to lower center goal
+    matchloader.move_absolute(-1700, 100);
+    chassis.moveToPoint(33, 0, 2000);
+    pros::delay(1200);
+    chassis.moveToPoint(0, 3, 200);
+    pros::delay(500);
+    chassis.moveToPoint(33, 0, 2000);
+    
     // //Score to lower center goal the payload
-    // intake.move_velocity(100);
-    // pros::delay(2000);
-    // intake.move_velocity(0);
+    intake.move_velocity(200);
+    pros::delay(2000);
+    intake.move_velocity(0);
 
     // //Move to matchload
-    // drive_backward_for_inches(80, 16);
-    // matchloader.move_absolute(0, 100);
+    // chassis.moveToPoint(0, -30, 2000);
+    // chassis.moveToPoint(0, -10, 700);
+    // chassis.moveToPoint(20, 0, 2000);
 
     // //Turn left to face the matchload
     // left_motor_group.move(-100);
