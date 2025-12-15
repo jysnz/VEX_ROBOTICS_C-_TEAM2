@@ -474,6 +474,66 @@ void autonomous() {
     pros::delay(7000);
     intake.move_velocity(0);
     
+    //Score to long goal
+    drive_backward_for_inches(60, 13);
+    pros::delay(1000);
+    catapult_arm.move_absolute(-400, 400);
+    discore.move_velocity(0);
+
+    right_motor_group.move(100);
+    pros::delay(600);
+    right_motor_group.move(0);
+
+    //Go to next matchload
+    drive_for_inches(80, 25);
+
+    right_motor_group.move(100);
+    pros::delay(600);
+    right_motor_group.move(0);
+
+    //Get the matchload
+    drive_for_inches(80, 7.5);
+    matchloader.move_absolute(0, 100);
+    intake.move_velocity(-200);
+    discore.move_absolute(-650, 200);
+    pros::delay(7000);
+    intake.move_velocity(0);
+
+    //Score to long goal
+    drive_backward_for_inches(60, 13);
+    pros::delay(1000);
+    catapult_arm.move_absolute(-400, 400);
+    discore.move_velocity(0);
+
+    //Clear the balls at parking area
+
+    drive_for_inches(80, 8);
+
+    right_motor_group.move(100);
+    pros::delay(600);
+    right_motor_group.move(0);
+
+    drive_backward_for_inches(80, 4);
+
+    right_motor_group.move(-100);
+    pros::delay(300);
+    right_motor_group.move(0);
+
+    drive_backward_for_inches(80, 3);
+
+    right_motor_group.move(-100);
+    pros::delay(250);
+    right_motor_group.move(0);
+
+    drive_backward_for_inches(120, 10);
+
+
+
+
+
+
+
+
     // //Turn left to lower center goal
     // right_motor_group.move(100);
     // pros::delay(270);
