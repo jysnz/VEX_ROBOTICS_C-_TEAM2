@@ -458,7 +458,7 @@ void autonomous() {
 
     //Turn left to lower center goal
     right_motor_group.move(100);
-    pros::delay(270);
+    pros::delay(250);
     right_motor_group.move(0);
 
     //Score to lower center goal the payload
@@ -467,23 +467,23 @@ void autonomous() {
     intake.move_velocity(0);
 
     //Move to matchload
-    drive_backward_for_inches(80, 17);
+    drive_backward_for_inches(80, 15.3);
     matchloader.move_absolute(0, 100);
 
     //Turn left to face the matchload
     left_motor_group.move(-100);
-    pros::delay(730);
+    pros::delay(715);
     left_motor_group.move(0);
 
     //Get the matchload
-    drive_for_inches(80, 8.5);
+    drive_for_inches(60, 9.5);
     intake.move_velocity(-200);
     discore.move_absolute(-650, 200);
     pros::delay(7000);
     intake.move_velocity(0);
 
     //Score to long goal
-    drive_backward_for_inches(60, 13);
+    drive_backward_for_inches(80, 13);
     pros::delay(1000);
     catapult_arm.move_absolute(-400, 400);
     discore.move_velocity(0);
