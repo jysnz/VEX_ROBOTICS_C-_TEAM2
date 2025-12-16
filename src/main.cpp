@@ -80,9 +80,91 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
 double prevLeft = 0.0;
 double prevRight = 0.0;
 
+const double TURN_MULTIPLIER = 2.85;
+
 // --- Helper functions ---
 float ticksToInches(float ticks) {
   return (ticks / ticksPerRev) * PI * wheelDiameter;
+}
+
+// SETTINGS
+// Cap voltage at 11000mV (approx 85% power). 
+// This ensures performance is the same at 100% batt and 60% batt.
+const int MAX_VOLTAGE = 11000; 
+
+// Helper function to convert RPM/Velocity (0-200) to Voltage (0-12000)
+// 200 RPM ~= 12000 mV
+double velocityToVoltage(double velocity) {
+    return (velocity / 200.0) * 12000.0;
+}
+
+// --- New drive_for_inches function ---
+double inchesToDegrees(double inches) {
+    double wheelCircumference = PI * wheelDiameter;
+    double rotations = inches / wheelCircumference;
+    return rotations * 360.0; // degrees
+}
+
+
+void drive_for_inches_consistent(double maxSpeedVelocity, double inches) {
+    double targetDegrees = inchesToDegrees(inches);
+    
+    // Convert the user's velocity input (0-200) to Voltage (0-11000)
+    // We cap it at MAX_VOLTAGE so it behaves the same on low battery.
+    double maxVolts = velocityToVoltage(maxSpeedVelocity);
+    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    // SLEW SETTINGS (Acceleration control)
+    double currentVolts = 0;
+    const double slewStep = 500; // How much voltage to add per loop (Adjust for acceleration)
+    
+    // DECEL SETTINGS
+    const double decelStartRatio = 0.70; // Start slowing down at 70% of distance
+    double decelPoint = targetDegrees * decelStartRatio;
+    
+    while (true) {
+        double currentPos = std::abs(left_motor_group.get_position()); // Simplified for brevity
+
+        // 1. CALCULATE DESIRED SPEED
+        double targetVolts = maxVolts;
+
+        // Deceleration Logic
+        if (currentPos > decelPoint) {
+            double remaining = targetDegrees - currentPos;
+            // Proportional slow down
+            targetVolts = maxVolts * (remaining / (targetDegrees - decelPoint));
+            // Minimum voltage to keep moving (friction threshold)
+            if (targetVolts < 2000) targetVolts = 2000; 
+        }
+
+        // 2. APPLY SLEW RATE (The Soft Start)
+        // If we want to go faster than we are currently going, only add a little bit
+        if (currentVolts < targetVolts) {
+            currentVolts += slewStep;
+            if (currentVolts > targetVolts) currentVolts = targetVolts;
+        } 
+        // If we need to slow down, we can drop voltage instantly (or slew down too)
+        else {
+            currentVolts = targetVolts;
+        }
+
+        // 3. MOVE WITH VOLTAGE
+        // Using move_voltage is more "raw" and honest than move_velocity
+        left_motor_group.move_voltage(currentVolts);
+        right_motor_group.move_voltage(currentVolts);
+
+        // Break condition
+        if (currentPos >= targetDegrees - 5) break;
+        
+        pros::delay(10);
+    }
+
+    // Stop
+    left_motor_group.move_voltage(0);
+    right_motor_group.move_voltage(0);
 }
 
 
@@ -128,47 +210,96 @@ double swingTurnDegrees(double angle) {
 // ======================================
 //   TURN LEFT (SWING TURN - Left Pivot)
 // ======================================
-void turn_left(double speed, double angle) {
-    // Calculate the target encoder degrees for the moving side (right)
-    double targetDeg = swingTurnDegrees(angle); 
+void turn_left(double maxSpeedVelocity, double robotDegrees) {
+    // 1. Calculate how much the WHEELS need to spin
+    double targetMotorDegrees = robotDegrees * TURN_MULTIPLIER;
+    
+    double maxVolts = velocityToVoltage(maxSpeedVelocity);
+    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
 
-    // Set the left motor to hold its position
-    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-    left_motor_group.move_velocity(0); // Ensure it starts stopped
-
+    left_motor_group.tare_position();
     right_motor_group.tare_position();
 
-    // Right motor moves forward (+) to the target
-    right_motor_group.move_relative(targetDeg, speed);
+    double currentVolts = 0;
+    const double slewStep = 500; 
+    double decelPoint = targetMotorDegrees * 0.60; 
 
-    int startTime = pros::millis();
     while (true) {
-        double rightPos = right_motor_group.get_position();
-        
-        // Check if the moving (right) motor is within tolerance of its target
-        bool right_done = std::abs(targetDeg - rightPos) < STOP_TOLERANCE;
+        double currentPos = (std::abs(left_motor_group.get_position()) + std::abs(right_motor_group.get_position())) / 2.0;
 
-        if (right_done) break;
+        double targetVolts = maxVolts;
+        if (currentPos > decelPoint) {
+            double remaining = targetMotorDegrees - currentPos;
+            targetVolts = maxVolts * (remaining / (targetMotorDegrees - decelPoint));
+            if (targetVolts < 2500) targetVolts = 2500; 
+        }
 
-        // Safety timeout (3 seconds)
-        if (pros::millis() - startTime > 3000) break;
+        if (currentVolts < targetVolts) {
+            currentVolts += slewStep;
+            if (currentVolts > targetVolts) currentVolts = targetVolts;
+        } else {
+            currentVolts = targetVolts;
+        }
 
+        // --- MOVE (SPLIT VOLTAGE) ---
+        // Left Turn: Left REV (-), Right FWD (+)
+        left_motor_group.move_voltage(-currentVolts);
+        right_motor_group.move_voltage(currentVolts);
+
+        if (currentPos >= targetMotorDegrees - 5) break;
         pros::delay(10);
     }
-    
-    // Explicitly stop the moving side
-    right_motor_group.move_velocity(0);
-    
-    // IMPORTANT: Reset the left motor brake mode if it needs to coast later
-    // You should probably set the default brake mode in initialize/opcontrol
-    // but for safety here, we'll leave it as HOLD so the robot doesn't drift.
+
+    left_motor_group.move_voltage(0);
+    right_motor_group.move_voltage(0);
 }
 
-// --- New drive_for_inches function ---
-double inchesToDegrees(double inches) {
-    double wheelCircumference = PI * wheelDiameter;
-    double rotations = inches / wheelCircumference;
-    return rotations * 360.0; // degrees
+void turn_right(double maxSpeedVelocity, double robotDegrees) {
+    // 1. Calculate how much the WHEELS need to spin
+    double targetMotorDegrees = robotDegrees * TURN_MULTIPLIER;
+    
+    // 2. Clamp Voltage
+    double maxVolts = velocityToVoltage(maxSpeedVelocity);
+    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    double currentVolts = 0;
+    const double slewStep = 500; 
+    double decelPoint = targetMotorDegrees * 0.60; // Start slowing earlier for turns (60%)
+
+    while (true) {
+        // Get average position of both sides
+        double currentPos = (std::abs(left_motor_group.get_position()) + std::abs(right_motor_group.get_position())) / 2.0;
+
+        // --- SPEED CALCULATION ---
+        double targetVolts = maxVolts;
+        if (currentPos > decelPoint) {
+            double remaining = targetMotorDegrees - currentPos;
+            targetVolts = maxVolts * (remaining / (targetMotorDegrees - decelPoint));
+            if (targetVolts < 2500) targetVolts = 2500; // Turns need more power to finish
+        }
+
+        // --- SLEW ---
+        if (currentVolts < targetVolts) {
+            currentVolts += slewStep;
+            if (currentVolts > targetVolts) currentVolts = targetVolts;
+        } else {
+            currentVolts = targetVolts;
+        }
+
+        // --- MOVE (SPLIT VOLTAGE) ---
+        // Right Turn: Left FWD (+), Right REV (-)
+        left_motor_group.move_voltage(currentVolts);
+        right_motor_group.move_voltage(-currentVolts);
+
+        if (currentPos >= targetMotorDegrees - 5) break;
+        pros::delay(10);
+    }
+
+    left_motor_group.move_voltage(0);
+    right_motor_group.move_voltage(0);
 }
 
 void drive_for_inches(double maxSpeed, double inches) {
@@ -223,6 +354,58 @@ void drive_for_inches(double maxSpeed, double inches) {
     // Hard stop
     left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
+}
+
+void drive_backward(double maxSpeedVelocity, double inches) {
+    // 1. Convert Inches to Motor Degrees
+    // (Make sure you still have your inchesToDegrees function from before!)
+    double targetDegrees = inchesToDegrees(inches);
+    
+    // 2. Clamp Voltage for Consistency
+    double maxVolts = velocityToVoltage(maxSpeedVelocity);
+    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    double currentVolts = 0;
+    const double slewStep = 500; // Acceleration (Change to make it faster/slower)
+    
+    // Deceleration Settings
+    double decelPoint = targetDegrees * 0.70; // Start slowing at 70%
+
+    while (true) {
+        // Get average position (absolute value)
+        double currentPos = (std::abs(left_motor_group.get_position()) + std::abs(right_motor_group.get_position())) / 2.0;
+
+        // --- SPEED CALCULATION ---
+        double targetVolts = maxVolts;
+        if (currentPos > decelPoint) {
+            double remaining = targetDegrees - currentPos;
+            targetVolts = maxVolts * (remaining / (targetDegrees - decelPoint));
+            if (targetVolts < 2000) targetVolts = 2000; // Min speed to move
+        }
+
+        // --- SLEW RATE (Soft Start) ---
+        if (currentVolts < targetVolts) {
+            currentVolts += slewStep;
+            if (currentVolts > targetVolts) currentVolts = targetVolts;
+        } else {
+            currentVolts = targetVolts;
+        }
+
+        // --- MOVE (NEGATIVE VOLTAGE) ---
+        left_motor_group.move_voltage(-currentVolts);
+        right_motor_group.move_voltage(-currentVolts);
+
+        // Break if we reached target
+        if (currentPos >= targetDegrees - 5) break;
+        pros::delay(10);
+    }
+
+    // Stop
+    left_motor_group.move_voltage(0);
+    right_motor_group.move_voltage(0);
 }
 
 
