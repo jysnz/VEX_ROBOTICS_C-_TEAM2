@@ -1,6 +1,7 @@
 #include "main.h"
 #include "lemlib/api.hpp"
 #include "pros/abstract_motor.hpp"
+#include "pros/adi.hpp"
 #include "pros/misc.h"
 #include "pros/motors.h"
 #include "pros/motors.hpp"
@@ -46,6 +47,8 @@ lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
                               400,                        // drivetrain rpm
                               2                           // horizontal drift
 );
+
+pros::adi::Ultrasonic ultrasonic('A', 'B');
 
 // --- Odometry ---
 pros::Imu imu(17);
@@ -105,6 +108,95 @@ double inchesToDegrees(double inches) {
     return rotations * 360.0; // degrees
 }
 
+void drive_to_object(double maxSpeed, double targetInches, int timeoutMs) {
+    // 1. Reset start time
+    int startTime = pros::millis();
+
+    // 2. Start moving
+    left_motor_group.move_velocity(maxSpeed);
+    right_motor_group.move_velocity(maxSpeed);
+
+    while (true) {
+        // --- READ SENSOR ---
+        // PROS ADI Ultrasonic returns Millimeters. 
+        // 25.4 mm = 1 inch.
+        double currentDistInches = ultrasonic.get_value() / 25.4;
+
+        // If using V5 Distance Sensor instead, use this line:
+        // double currentDistInches = distance_sensor.get() / 25.4;
+
+        // --- CHECKS ---
+        
+        // 1. Check if we are close enough
+        // We check > 0 because sometimes sensors return -1 if they see nothing
+        if (currentDistInches < targetInches && currentDistInches > 0) {
+            break; 
+        }
+
+        // 2. Check for timeout (Safety)
+        if (pros::millis() - startTime > timeoutMs) {
+            break;
+        }
+
+        pros::delay(10);
+    }
+
+    // 3. Stop
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+}
+
+void reverse_to_object_smooth(double maxSpeed, double targetInches, int timeoutMs) {
+    int startTime = pros::millis();
+    
+    // 1. Initial speed and ramping constants
+    double currentSpeed = 0;
+    const double accelRate = 4.0; // How fast it speeds up per 10ms
+    const double minSpeed = 15.0; // Minimum speed to keep the robot moving
+    
+    // We define a "deceleration zone" in inches. 
+    // Example: Start slowing down when within 10 inches of the target.
+    const double decelZone = 10.0; 
+
+    while (true) {
+        // --- READ SENSOR ---
+        double currentDist = ultrasonic.get_value() / 25.4; // Convert mm to inches
+        
+        // --- 1. HANDLE SPEED (Ramping) ---
+        // Calculate how far we are from our stopping point
+        double error = currentDist - targetInches;
+
+        if (error > decelZone) {
+            // ACCELERATION PHASE
+            currentSpeed += accelRate;
+            if (currentSpeed > maxSpeed) currentSpeed = maxSpeed;
+        } 
+        else {
+            // DECELERATION PHASE
+            // Scale speed based on how close we are to the targetInches
+            currentSpeed = maxSpeed * (error / decelZone);
+            if (currentSpeed < minSpeed) currentSpeed = minSpeed;
+        }
+
+        // --- 2. MOVE MOTORS ---
+        // Using negative currentSpeed because we are reversing
+        left_motor_group.move_velocity(-currentSpeed);
+        right_motor_group.move_velocity(-currentSpeed);
+
+        // --- 3. END CONDITIONS ---
+        // Stop if we reach the target distance (with a 0.5 inch tolerance)
+        if (currentDist <= targetInches + 0.5 && currentDist > 0) break;
+
+        // Safety Timeout
+        if (pros::millis() - startTime > timeoutMs) break;
+
+        pros::delay(10);
+    }
+
+    // --- 4. FINAL HARD STOP ---
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+}
 
 void drive_for_inches_consistent(double maxSpeedVelocity, double inches) {
     double targetDegrees = inchesToDegrees(inches);
@@ -635,80 +727,28 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    //Move to lower center goal
-    matchloader.move_absolute(-1700, 100);
-    drive_for_inches(100, 38);
+    reverse_to_object_smooth(60, 2, 2000);
 
-    left_motor_group.move(100);
-    pros::delay(350);
-    left_motor_group.move(0);
+    // //Move to lower center goal
+    // matchloader.move_absolute(-1700, 100);
+    // drive_for_inches(40, 12);
 
-    drive_for_inches(80, 16);
-    
-    right_motor_group.move(100);
-    pros::delay(310);
-    right_motor_group.move(0);
+    // pros::delay(1000);
 
-    //Get the matchload
-    drive_for_inches(80, 7.5);
-    matchloader.move_absolute(0, 100);
-    intake.move_velocity(-200);
-    discore.move_absolute(-650, 200);
-    pros::delay(7000);
-    intake.move_velocity(0);
-    
-    //Score to long goal
-    drive_backward_for_inches(60, 13);
-    pros::delay(1000);
-    catapult_arm.move_absolute(-400, 400);
-    discore.move_velocity(0);
+    // left_motor_group.move(60);
+    // pros::delay(1300);
+    // left_motor_group.move(0);
 
-    right_motor_group.move(100);
-    pros::delay(600);
-    right_motor_group.move(0);
+    // pros::delay(1000);
 
-    //Go to next matchload
-    drive_for_inches(80, 25);
+    // drive_for_inches(40, 12);
 
-    right_motor_group.move(100);
-    pros::delay(600);
-    right_motor_group.move(0);
+    // pros::delay(1000);
 
-    //Get the matchload
-    drive_for_inches(80, 7.5);
-    matchloader.move_absolute(0, 100);
-    intake.move_velocity(-200);
-    discore.move_absolute(-650, 200);
-    pros::delay(7000);
-    intake.move_velocity(0);
+    // left_motor_group.move(60);
+    // pros::delay(1300);
+    // left_motor_group.move(0);
 
-    //Score to long goal
-    drive_backward_for_inches(60, 13);
-    pros::delay(1000);
-    catapult_arm.move_absolute(-400, 400);
-    discore.move_velocity(0);
-
-    //Clear the balls at parking area
-
-    drive_for_inches(80, 8);
-
-    right_motor_group.move(100);
-    pros::delay(600);
-    right_motor_group.move(0);
-
-    drive_backward_for_inches(80, 4);
-
-    right_motor_group.move(-100);
-    pros::delay(300);
-    right_motor_group.move(0);
-
-    drive_backward_for_inches(80, 3);
-
-    right_motor_group.move(-100);
-    pros::delay(250);
-    right_motor_group.move(0);
-
-    drive_backward_for_inches(120, 10);
 
 
 
