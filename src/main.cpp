@@ -1,6 +1,7 @@
 #include "main.h"
 #include "lemlib/api.hpp"
 #include "pros/abstract_motor.hpp"
+#include "pros/adi.hpp"
 #include "pros/misc.h"
 #include "pros/motors.h"
 #include "pros/motors.hpp"
@@ -35,6 +36,9 @@ pros::Motor catapult_arm(7, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
 pros::Motor matchloader(5, pros::MotorGears::red);
 pros::Motor discore(12, pros::MotorGears::green);
+
+// Plug 'Ping' into port E, 'Echo' into port F (Change letters as needed)
+pros::adi::Ultrasonic ultrasonic('A', 'B');
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -108,6 +112,35 @@ void odometryTask() {
     updateOdometry();
     pros::delay(10);
   }
+}
+
+void fire_catapult_safe(double targetInches) {
+    // 1. Get the current distance
+    double currentDist = ultrasonic.get_value() / 25.4;
+
+    // 2. PRINT TO LAPTOP TERMINAL
+    // \n is a "newline" so each reading starts on a new line
+    // \r is a "carriage return" to prevent messy indenting
+    printf("Distance: %.2f in | Target: %.1f in | Status: ", currentDist, targetInches);
+
+    // 3. Logic and Status Printing
+    if (currentDist > 1.0 && currentDist < targetInches) {
+        printf("FIRING\n"); // Laptop output
+        pros::lcd::print(5, "STATE: FIRING"); // Brain output
+        
+        catapult_arm.move_absolute(-600, 400);
+        discore.move_velocity(0); 
+    } 
+    else if (currentDist <= 1.0 && currentDist > 0) {
+        printf("BLINDED (Too Close)\n");
+        pros::lcd::print(5, "STATE: BLINDED");
+        catapult_arm.move_absolute(0, 400);
+    }
+    else {
+        printf("EMPTY/FAR\n");
+        pros::lcd::print(5, "STATE: EMPTY");
+        catapult_arm.move_absolute(0, 400);
+    }
 }
 double swingTurnDegrees(double angle) {
     // The stationary left wheels are the center of the arc.
@@ -485,7 +518,8 @@ void autonomous() {
     //Score to long goal
     drive_backward_for_inches(60, 13);
     pros::delay(1000);
-    catapult_arm.move_absolute(-400, 400);
+
+    fire_catapult_safe(2);
     discore.move_velocity(0);
     pros::delay(1000);
     catapult_arm.move_absolute(0, 400);
