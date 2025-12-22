@@ -77,6 +77,8 @@ void opcontrol() {
         pros::delay(20);
 
         
+
+        
         // bool intakeForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
         // bool intakeReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
         // bool intakePause = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
@@ -190,9 +192,16 @@ void autonomous() {
     catapult_arm.move_absolute(0, 400);
     intake.move_velocity(0);
 
+    
     // drive_for_inches_consistent(80, 7);
 
     // drive_arc_consistent(80, 25, 30, false, false);
     // drive_for_inches_consistent(120, 20);
     
 }
+
+
+
+
+
+

@@ -10,7 +10,7 @@ pros::Motor discore(12, pros::MotorGears::green);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
 // --- Drivetrain & Odometry Setup ---
-lemlib::Drivetrain drivetrain(&left_motor_group, &right_motor_group, 14, lemlib::Omniwheel::NEW_325, 400, 2);
+lemlib::Drivetrain drivetrain(&left_motor_group, &right_motor_group, 14.5, lemlib::Omniwheel::NEW_325, 400, 2);
 pros::adi::Ultrasonic ultrasonic('A', 'B');
 pros::Imu imu(17);
 pros::Rotation horizontal_encoder(20);
