@@ -28,6 +28,11 @@ float kP = 1.0;
 float kI = 0.0;
 float kD = 0.5;
 
+double prevLeft = 0.0;
+double prevRight = 0.0;
+const int MAX_VOLTAGE = 11000; 
+const double TURN_MULTIPLIER = 2.85;
+
 // --- Motors ---
 pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
@@ -42,7 +47,7 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 // --- Drivetrain ---
 lemlib::Drivetrain drivetrain(&left_motor_group,          // left motor group
                               &right_motor_group,         // right motor group
-                              10,                         // 10 inch track width
+                              14,                         // 10 inch track width
                               lemlib::Omniwheel::NEW_325, // using new 4" omnis
                               400,                        // drivetrain rpm
                               2                           // horizontal drift
@@ -80,10 +85,6 @@ lemlib::ExpoDriveCurve steer_curve(3, 10, 1.019);
 lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
                         sensors, &throttle_curve, &steer_curve);
 
-double prevLeft = 0.0;
-double prevRight = 0.0;
-
-const double TURN_MULTIPLIER = 2.85;
 
 // --- Helper functions ---
 float ticksToInches(float ticks) {
@@ -93,8 +94,6 @@ float ticksToInches(float ticks) {
 // SETTINGS
 // Cap voltage at 11000mV (approx 85% power). 
 // This ensures performance is the same at 100% batt and 60% batt.
-const int MAX_VOLTAGE = 11000; 
-
 // Helper function to convert RPM/Velocity (0-200) to Voltage (0-12000)
 // 200 RPM ~= 12000 mV
 double velocityToVoltage(double velocity) {
@@ -432,288 +431,6 @@ void odometryTask() {
     pros::delay(10);
   }
 }
-double swingTurnDegrees(double angle) {
-    // The stationary left wheels are the center of the arc.
-    // The right wheels travel an arc with a radius equal to the trackWidth (12.0 inches).
-
-    // 1. Calculate the arc distance traveled by the moving (right) wheel:
-    // Arc Length = (angle / 360) * 2 * PI * Radius
-    // Radius = trackWidth
-    double radius = trackWidth;
-    double arc_distance = (angle / 360.0) * (2.0 * PI * radius);
-
-    // 2. Convert this distance to required motor degrees:
-    double wheelCircumference = PI * wheelDiameter;
-    double rotations = arc_distance / wheelCircumference;
-    return rotations * ticksPerRev; 
-}
-
-// ======================================
-//   TURN LEFT (SWING TURN - Left Pivot)
-// ======================================
-void turn_left(double maxSpeedVelocity, double robotDegrees) {
-    // 1. Calculate how much the WHEELS need to spin
-    double targetMotorDegrees = robotDegrees * TURN_MULTIPLIER;
-    
-    double maxVolts = velocityToVoltage(maxSpeedVelocity);
-    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    double currentVolts = 0;
-    const double slewStep = 500; 
-    double decelPoint = targetMotorDegrees * 0.60; 
-
-    while (true) {
-        double currentPos = (std::abs(left_motor_group.get_position()) + std::abs(right_motor_group.get_position())) / 2.0;
-
-        double targetVolts = maxVolts;
-        if (currentPos > decelPoint) {
-            double remaining = targetMotorDegrees - currentPos;
-            targetVolts = maxVolts * (remaining / (targetMotorDegrees - decelPoint));
-            if (targetVolts < 2500) targetVolts = 2500; 
-        }
-
-        if (currentVolts < targetVolts) {
-            currentVolts += slewStep;
-            if (currentVolts > targetVolts) currentVolts = targetVolts;
-        } else {
-            currentVolts = targetVolts;
-        }
-
-        // --- MOVE (SPLIT VOLTAGE) ---
-        // Left Turn: Left REV (-), Right FWD (+)
-        left_motor_group.move_voltage(-currentVolts);
-        right_motor_group.move_voltage(currentVolts);
-
-        if (currentPos >= targetMotorDegrees - 5) break;
-        pros::delay(10);
-    }
-
-    left_motor_group.move_voltage(0);
-    right_motor_group.move_voltage(0);
-}
-
-void turn_right(double maxSpeedVelocity, double robotDegrees) {
-    // 1. Calculate how much the WHEELS need to spin
-    double targetMotorDegrees = robotDegrees * TURN_MULTIPLIER;
-    
-    // 2. Clamp Voltage
-    double maxVolts = velocityToVoltage(maxSpeedVelocity);
-    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    double currentVolts = 0;
-    const double slewStep = 500; 
-    double decelPoint = targetMotorDegrees * 0.60; // Start slowing earlier for turns (60%)
-
-    while (true) {
-        // Get average position of both sides
-        double currentPos = (std::abs(left_motor_group.get_position()) + std::abs(right_motor_group.get_position())) / 2.0;
-
-        // --- SPEED CALCULATION ---
-        double targetVolts = maxVolts;
-        if (currentPos > decelPoint) {
-            double remaining = targetMotorDegrees - currentPos;
-            targetVolts = maxVolts * (remaining / (targetMotorDegrees - decelPoint));
-            if (targetVolts < 2500) targetVolts = 2500; // Turns need more power to finish
-        }
-
-        // --- SLEW ---
-        if (currentVolts < targetVolts) {
-            currentVolts += slewStep;
-            if (currentVolts > targetVolts) currentVolts = targetVolts;
-        } else {
-            currentVolts = targetVolts;
-        }
-
-        // --- MOVE (SPLIT VOLTAGE) ---
-        // Right Turn: Left FWD (+), Right REV (-)
-        left_motor_group.move_voltage(currentVolts);
-        right_motor_group.move_voltage(-currentVolts);
-
-        if (currentPos >= targetMotorDegrees - 5) break;
-        pros::delay(10);
-    }
-
-    left_motor_group.move_voltage(0);
-    right_motor_group.move_voltage(0);
-}
-
-void drive_for_inches(double maxSpeed, double inches) {
-    double targetDegrees = inchesToDegrees(inches);
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    const double accelRate = 2.0;
-    const double decelStart = 0.6;
-
-    double currentSpeed = 0;
-    double decelPoint = targetDegrees * decelStart;
-
-    while (true) {
-        double leftPos  = std::abs(left_motor_group.get_position());
-        double rightPos = std::abs(right_motor_group.get_position());
-        double avgPos   = (leftPos + rightPos) / 2.0;
-
-        // ACCELERATION
-        if (avgPos < decelPoint) {
-            currentSpeed += accelRate;
-            if (currentSpeed > maxSpeed)
-                currentSpeed = maxSpeed;
-        }
-        // DECELERATION
-        else {
-            double remaining = targetDegrees - avgPos;
-            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
-            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
-        }
-
-        // END CONDITION
-        if (avgPos >= targetDegrees - 2) break;
-
-        left_motor_group.move_velocity(currentSpeed);
-        right_motor_group.move_velocity(currentSpeed);
-
-        pros::delay(10);
-    }
-
-    // ----- SMOOTH FINAL STOP -----
-    double lastSpeed = std::max(currentSpeed, 10.0); // start ramp-down from current speed
-    while (lastSpeed > 0) {
-        left_motor_group.move_velocity(lastSpeed);
-        right_motor_group.move_velocity(lastSpeed);
-        lastSpeed -= 2;           // small decrement for smooth stop
-        if (lastSpeed < 0) lastSpeed = 0;
-        pros::delay(10);
-    }
-
-    // Hard stop
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
-}
-
-void drive_backward(double maxSpeedVelocity, double inches) {
-    // 1. Convert Inches to Motor Degrees
-    // (Make sure you still have your inchesToDegrees function from before!)
-    double targetDegrees = inchesToDegrees(inches);
-    
-    // 2. Clamp Voltage for Consistency
-    double maxVolts = velocityToVoltage(maxSpeedVelocity);
-    if (maxVolts > MAX_VOLTAGE) maxVolts = MAX_VOLTAGE;
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    double currentVolts = 0;
-    const double slewStep = 500; // Acceleration (Change to make it faster/slower)
-    
-    // Deceleration Settings
-    double decelPoint = targetDegrees * 0.70; // Start slowing at 70%
-
-    while (true) {
-        // Get average position (absolute value)
-        double currentPos = (std::abs(left_motor_group.get_position()) + std::abs(right_motor_group.get_position())) / 2.0;
-
-        // --- SPEED CALCULATION ---
-        double targetVolts = maxVolts;
-        if (currentPos > decelPoint) {
-            double remaining = targetDegrees - currentPos;
-            targetVolts = maxVolts * (remaining / (targetDegrees - decelPoint));
-            if (targetVolts < 2000) targetVolts = 2000; // Min speed to move
-        }
-
-        // --- SLEW RATE (Soft Start) ---
-        if (currentVolts < targetVolts) {
-            currentVolts += slewStep;
-            if (currentVolts > targetVolts) currentVolts = targetVolts;
-        } else {
-            currentVolts = targetVolts;
-        }
-
-        // --- MOVE (NEGATIVE VOLTAGE) ---
-        left_motor_group.move_voltage(-currentVolts);
-        right_motor_group.move_voltage(-currentVolts);
-
-        // Break if we reached target
-        if (currentPos >= targetDegrees - 5) break;
-        pros::delay(10);
-    }
-
-    // Stop
-    left_motor_group.move_voltage(0);
-    right_motor_group.move_voltage(0);
-}
-
-
-void drive_backward_for_inches(double maxSpeed, double inches) {
-    // targetDegrees is the magnitude of the rotation needed (always positive)
-    double targetDegrees = inchesToDegrees(inches);
-
-    left_motor_group.tare_position();
-    right_motor_group.tare_position();
-
-    // Constant parameters
-    const double accelRate = 2.0;
-    const double decelStart = 0.6; // Start decelerating at 60% of the distance
-
-    double currentSpeed = 0;
-    double decelPoint = targetDegrees * decelStart;
-    
-    // We will use a negative speed command to move backward
-    double backwardSpeedCommand = 0.0;
-
-    while (true) {
-        // Use the absolute value for position tracking, as in the original function.
-        // This keeps the acceleration/deceleration logic simple and positive-based.
-        double leftPos  = std::abs(left_motor_group.get_position());
-        double rightPos = std::abs(right_motor_group.get_position());
-        double avgPos   = (leftPos + rightPos) / 2.0;
-
-        // ACCELERATION (same logic as forward)
-        if (avgPos < decelPoint) {
-            currentSpeed += accelRate;
-            if (currentSpeed > maxSpeed)
-                currentSpeed = maxSpeed;
-        }
-        // DECELERATION (same logic as forward)
-        else {
-            double remaining = targetDegrees - avgPos;
-            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
-            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
-        }
-
-        // Set the final speed command to be negative for backward movement
-        backwardSpeedCommand = -currentSpeed;
-
-        // END CONDITION
-        if (avgPos >= targetDegrees - 2) break; // Stop a little early
-
-        left_motor_group.move_velocity(backwardSpeedCommand);
-        right_motor_group.move_velocity(backwardSpeedCommand);
-
-        pros::delay(10);
-    }
-
-    // ----- SMOOTH FINAL STOP (Ramp down to 0) -----
-    // We ramp down the NEGATIVE speed towards 0
-    double lastSpeedCommand = std::min(backwardSpeedCommand, -10.0); // start ramp-down from current speed
-    while (lastSpeedCommand < 0) { // loop while the command is negative
-        left_motor_group.move_velocity(lastSpeedCommand);
-        right_motor_group.move_velocity(lastSpeedCommand);
-        lastSpeedCommand += 2;      // small POSITIVE increment to approach 0
-        if (lastSpeedCommand > 0) lastSpeedCommand = 0;
-        pros::delay(10);
-    }
-
-    // Hard stop
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
-}
 
 void drive_back_and_forth(double times, double speed, double seconds){
     for(int i = 0; i < times; i++){
@@ -724,18 +441,6 @@ void drive_back_and_forth(double times, double speed, double seconds){
         right_motor_group.move(speed);
         pros::delay(seconds);
     }
-}
-
-void turn_right(double ms){
-    left_motor_group.move(200);
-    pros::delay(ms);
-    left_motor_group.move(0);
-}
-
-void turn_left(double ms){
-    right_motor_group.move(200);
-    pros::delay(ms);
-    right_motor_group.move(0);
 }
 
 // --- Initialize ---
@@ -860,7 +565,7 @@ void opcontrol() {
         if (discoreDown) {
             discore.move_velocity(0);
         }
-        else if (discoreUp) discore.move_absolute(-650, 200);
+        else if (discoreUp) discore.move_absolute(-500, 200);
 
         if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(0, 100);
         else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1700, 100);
@@ -876,17 +581,11 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    //Forward
-    // matchloader.move_absolute(-1700, 100);
     drive_for_inches_consistent(80, 12);
 
     pros::delay(1000);
 
-    turn_time_consistent(80, 685, true);
-    // //Turn left
-    // right_motor_group.move(80);
-    // pros::delay(580);
-    // right_motor_group.move(0);
+    turn_time_consistent(80, 679, true);
 
     pros::delay(1000);
 
@@ -896,111 +595,55 @@ void autonomous() {
 
     pros::delay(500);
 
-    turn_time_consistent(80, 685, true);
-
-    // //Turn left
-    // right_motor_group.move(80);
-    // pros::delay(580);
-    // right_motor_group.move(0);
+    turn_time_consistent(80, 679, true);
 
     pros::delay(500);
 
     //Move to matchload
     intake.move_velocity(-200);
+    discore.move_absolute(-500, 200);
     drive_for_inches_consistent(80, 8.5);
     pros::delay(500);
-    discore.move_absolute(-650, 200);
-    drive_backward_consistent(80, 2);
-    drive_for_inches_consistent(80, 2);
-    drive_backward_consistent(80, 2);
-    drive_for_inches_consistent(80, 2);
-    drive_backward_consistent(80, 2);
-
     pros::delay(2000);
 
 
-    drive_backward_consistent(80, 24);
+    drive_backward_consistent(80, 24.3);
 
     pros::delay(1000);
     discore.move_absolute(0, 200);
-    catapult_arm.move_absolute(-600, 100);
+    catapult_arm.move_absolute(-400, 100);
     pros::delay(500);
     catapult_arm.move_absolute(0, 100);
     pros::delay(500);
-    catapult_arm.move_absolute(-600, 100);
+    catapult_arm.move_absolute(-400, 100);
     pros::delay(500);
     catapult_arm.move_absolute(0, 100);
     intake.move_velocity(0);
 
 
-    drive_for_inches_consistent(80, 25);
+    drive_for_inches_consistent(80, 23);
     pros::delay(500);
 
-    discore.move_absolute(-650, 200);
+    discore.move_absolute(-500, 200);
     intake.move_velocity(-200);
-    drive_backward_consistent(80, 2);
-    drive_for_inches_consistent(80, 2);
-    drive_backward_consistent(80, 2);
-    drive_for_inches_consistent(80, 2);
-    drive_backward_consistent(80, 2);
     pros::delay(2000);
 
-    drive_backward_consistent(80, 25);
+    drive_backward_consistent(150, 25);
 
     pros::delay(1000);
     discore.move_absolute(0, 200);
-    catapult_arm.move_absolute(-600, 400);
+    catapult_arm.move_absolute(-400, 100);
     pros::delay(500);
     catapult_arm.move_absolute(0, 400);
     pros::delay(500);
-    catapult_arm.move_absolute(-600, 400);
+    catapult_arm.move_absolute(-400, 100);
     pros::delay(500);
     catapult_arm.move_absolute(0, 400);
     intake.move_velocity(0);
+
+    // drive_for_inches_consistent(80, 7);
 
     // drive_arc_consistent(80, 25, 30, false, false);
     // drive_for_inches_consistent(120, 20);
-
-
-
-
-
-
-
-
-
-
-
-    // //Turn left to lower center goal
-    // right_motor_group.move(100);
-    // pros::delay(270);
-    // right_motor_group.move(0);
-
-    // //Score to lower center goal the payload
-    // intake.move_velocity(100);
-    // pros::delay(2000);
-    // intake.move_velocity(0);
-
-    // //Move to matchload
-    // drive_backward_for_inches(80, 17);
-    // matchloader.move_absolute(0, 100);
-
-    // //Turn left to face the matchload
-    // left_motor_group.move(-100);
-    // pros::delay(730);
-    // left_motor_group.move(0);
-
-    // //Get the matchload
-    // drive_for_inches(80, 8.5);
-    // intake.move_velocity(-200);
-    // discore.move_absolute(-650, 200);
-    // pros::delay(7000);
-    // intake.move_velocity(0);
-
-    // //Score to long goal
-    // drive_backward_for_inches(60, 13);
-    // pros::delay(1000);
-    // catapult_arm.move_absolute(-400, 400);
-    // discore.move_velocity(0);
 
 }
