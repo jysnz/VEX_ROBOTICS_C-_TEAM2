@@ -1,7 +1,7 @@
 #include "helpers.hpp"
 
 const double wheelDiameter = 3.25;
-const double trackWidth = 24;
+const double trackWidth = 14.5;
 const double ticksPerRev = 360.0;
 const int MAX_VOLTAGE = 11000;
 const float PI = 3.14159;

@@ -1,7 +1,5 @@
 #include "robot_config.hpp"
 
-
-
 // --- Motors ---
 pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);

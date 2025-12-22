@@ -1,5 +1,16 @@
 #include "tasks.hpp"
 #include "helpers.cpp"
+#include "liblvgl/display/lv_display.h"
+
+// Access global variables
+float tune_kp = 10.0, tune_ki = 0.0, tune_kd = 3.0, tune_start_i = 2.0;
+TuningMode currentMode = LATERAL;
+int test_index = 0;
+const char* test_names[] = {"Drive 12\"", "Drive 24\"", "Turn 90", "Swing 90", "Triple Move"};
+
+lv_obj_t* pid_chart;
+lv_chart_series_t* error_series;
+lv_obj_t* pid_label;
 
 void updateOdometry() {
   float leftDist = ticksToInches(left_motor_group.get_position());
@@ -92,6 +103,39 @@ void startScreenTask() {
             drawRow(4, "Disc", discore.get_temperature());
 
             pros::delay(200);
+        }
+    });
+}
+
+void startTuningUI() {
+    // 1. Setup Chart
+    pid_chart = lv_chart_create(lv_screen_active());
+    lv_obj_set_size(pid_chart, 200, 120);
+    lv_obj_align(pid_chart, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_chart_set_type(pid_chart, LV_CHART_TYPE_LINE);
+    lv_chart_set_range(pid_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30); // Range for inches
+    error_series = lv_chart_add_series(pid_chart, lv_palette_main(LV_PALETTE_PINK), LV_CHART_AXIS_PRIMARY_Y);
+
+    // 2. Setup Label
+    pid_label = lv_label_create(lv_screen_active());
+    lv_obj_align(pid_label, LV_ALIGN_BOTTOM_LEFT, 10, -5);
+    lv_label_set_recolor(pid_label, true);
+
+    // 3. Update Task
+    static pros::Task ui_task([]() {
+        while (true) {
+            const char* mode_name = (currentMode == LATERAL) ? "#00FFFF LATERAL#" : "#FFA500 ANGULAR#";
+            
+            // Update Graph: Show Y for Lateral moves, Theta for Angular
+            float graph_val = (currentMode == LATERAL) ? chassis.getPose().y : chassis.getPose().theta;
+            lv_chart_set_next_value(pid_chart, error_series, (int)graph_val);
+
+            // Update Text
+            lv_label_set_text_fmt(pid_label, 
+                "MODE: %s  TEST: #00FF00 %s#\nP:%.2f I:%.3f D:%.2f  StI:%.1f", 
+                mode_name, test_names[test_index], tune_kp, tune_ki, tune_kd, tune_start_i);
+
+            pros::delay(50);
         }
     });
 }
