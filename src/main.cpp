@@ -3,6 +3,7 @@
 #include "helpers.hpp"
 #include "tasks.hpp"
 #include "robot_config.cpp"
+#include "autons.hpp"
 
 // --- Initialize ---
 void initialize() {
@@ -132,71 +133,73 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    drive_for_inches_consistent(80, 12);
+    skills_autonomous_left();
 
-    pros::delay(1000);
+    // drive_for_inches_consistent(80, 12);
 
-    turn_time_consistent(80, 679, true);
+    // pros::delay(1000);
 
-    pros::delay(1000);
+    // turn_time_consistent(80, 679, true);
 
-    //Forward
-    matchloader.move_absolute(0, 100);
-    drive_for_inches_consistent(80, 27.2);
+    // pros::delay(1000);
 
-    pros::delay(500);
+    // //Forward
+    // matchloader.move_absolute(0, 100);
+    // drive_for_inches_consistent(80, 27.2);
 
-    turn_time_consistent(80, 679, true);
+    // pros::delay(500);
 
-    pros::delay(500);
+    // turn_time_consistent(80, 679, true);
 
-    //Move to matchload
-    intake.move_velocity(-200);
-    discore.move_absolute(-500, 200);
-    drive_for_inches_consistent(80, 8.5);
-    pros::delay(500);
-    pros::delay(2000);
+    // pros::delay(500);
 
-
-    drive_backward_consistent(80, 24.3);
-
-    pros::delay(1000);
-    discore.move_absolute(0, 200);
-    catapult_arm.move_absolute(-400, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(0, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(-400, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(0, 100);
-    intake.move_velocity(0);
+    // //Move to matchload
+    // intake.move_velocity(-200);
+    // discore.move_absolute(-500, 200);
+    // drive_for_inches_consistent(80, 8.5);
+    // pros::delay(500);
+    // pros::delay(2000);
 
 
-    drive_for_inches_consistent(80, 23);
-    pros::delay(500);
+    // drive_backward_consistent(80, 24.3);
 
-    discore.move_absolute(-500, 200);
-    intake.move_velocity(-200);
-    pros::delay(2000);
+    // pros::delay(1000);
+    // discore.move_absolute(0, 200);
+    // catapult_arm.move_absolute(-400, 100);
+    // pros::delay(500);
+    // catapult_arm.move_absolute(0, 100);
+    // pros::delay(500);
+    // catapult_arm.move_absolute(-400, 100);
+    // pros::delay(500);
+    // catapult_arm.move_absolute(0, 100);
+    // intake.move_velocity(0);
 
-    drive_backward_consistent(150, 25);
 
-    pros::delay(1000);
-    discore.move_absolute(0, 200);
-    catapult_arm.move_absolute(-400, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(0, 400);
-    pros::delay(500);
-    catapult_arm.move_absolute(-400, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(0, 400);
-    intake.move_velocity(0);
+    // drive_for_inches_consistent(80, 23);
+    // pros::delay(500);
+
+    // discore.move_absolute(-500, 200);
+    // intake.move_velocity(-200);
+    // pros::delay(2000);
+
+    // drive_backward_consistent(150, 25);
+
+    // pros::delay(1000);
+    // discore.move_absolute(0, 200);
+    // catapult_arm.move_absolute(-400, 100);
+    // pros::delay(500);
+    // catapult_arm.move_absolute(0, 400);
+    // pros::delay(500);
+    // catapult_arm.move_absolute(-400, 100);
+    // pros::delay(500);
+    // catapult_arm.move_absolute(0, 400);
+    // intake.move_velocity(0);
 
     
-    // drive_for_inches_consistent(80, 7);
+    // // drive_for_inches_consistent(80, 7);
 
-    // drive_arc_consistent(80, 25, 30, false, false);
-    // drive_for_inches_consistent(120, 20);
+    // // drive_arc_consistent(80, 25, 30, false, false);
+    // // drive_for_inches_consistent(120, 20);
     
 }
 
