@@ -351,3 +351,32 @@ void drive_back_and_forth(double times, double speed, double seconds){
         pros::delay(seconds);
     }
 }
+
+void eat_ball(double milliseconds, double velocity){
+    intake.move_velocity(-velocity);
+    pros::delay(milliseconds);
+    intake.move_velocity(0);
+}
+
+void spit_ball(double milliseconds, double velocity){
+    intake.move_velocity(velocity);
+    pros::delay(milliseconds);
+    intake.move_velocity(0);
+}
+
+void get_matchload(double milliseconds, double velocity){
+    discore.move_absolute(-500, 200);
+    intake.move_velocity(-velocity);
+    pros::delay(milliseconds);
+}
+
+void score_long_goal(double angle, double velocity) {
+    discore.move_velocity(0);
+    catapult_arm.move_absolute(-angle, velocity);
+    pros::delay(500);
+    catapult_arm.move_absolute(0, velocity);
+    pros::delay(500);
+    catapult_arm.move_absolute(-angle, velocity);
+    pros::delay(500);
+    catapult_arm.move_absolute(0, velocity);
+}

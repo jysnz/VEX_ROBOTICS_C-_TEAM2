@@ -1,6 +1,8 @@
 #include "robot_config.hpp"
+#include "helpers.hpp"
 
 void skills_autonomous_left(){
+    chassis.calibrate();
     chassis.setPose(-62.636, 17.13, 0);
     
     //Score to upper center goal
@@ -74,43 +76,40 @@ void skills_autonomous_left(){
 };
 
 void twoVtwo_autonomous_right(){
-
+    chassis.calibrate();
+    chassis.setPose(-62.90, -17.10, 0);
     //Score to lower center goal
-    chassis.setPose(-62.87, -16.93, 0);
     matchloader.move_absolute(-1700, 100);
-    chassis.moveToPoint(-17.08, -16.93, 5000);
-    chassis.moveToPoint(-12.97, -12.82, 5000);
-    intake.move_velocity(200);
-    pros::delay(1000);
-    intake.move_velocity(0);
+    chassis.moveToPoint(-17.03, -17.10, 5000);
+    chassis.turnToHeading(43.15, 5000);
+    chassis.moveToPoint(-12.91, -12.71, 5000);
+    spit_ball(1000, 200);
 
     //Get the matchload
-    chassis.moveToPoint(-46.24, -46.98, 5000);
+    chassis.moveToPoint(-40.42, -47.26, 5000, {.forwards = false});
     matchloader.move_absolute(0, 100);
-    chassis.moveToPoint(-60.37, -46.98, 5000);
-    discore.move_absolute(-500, 200);
-    intake.move_velocity(-200);
-    pros::delay(3000);
+    chassis.turnToHeading(270, 5000);
+    chassis.moveToPoint(-61.87, -47, 5000, {.maxSpeed = 60});
+    get_matchload(3000, 200);
 
     //Score to long goal
-    chassis.moveToPoint(-28.17, -46.98, 5000);
-    discore.move_velocity(0);
-    catapult_arm.move_absolute(-600, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(0, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(-600, 100);
-    pros::delay(500);
-    catapult_arm.move_absolute(0, 100);
+    chassis.moveToPoint(-28.68, -47, 5000, {.forwards = false});
+    score_long_goal(600, 100);
+    intake.move_velocity(0);
 
     //Use discore to gain control zone
-    chassis.moveToPoint(-44.98, -37.19, 5000);
-    chassis.moveToPoint(-14.22, -37.19, 5000);
-    chassis.moveToPoint(-44.98, -37.19, 5000);
+    chassis.moveToPoint(-40.42, -47.26, 5000);
+    chassis.turnToHeading(38.08, 5000);
+    chassis.moveToPoint(-33.02, -37.81, 5000);
+    chassis.turnToHeading(90, 0);
+    chassis.moveToPoint(-14.13, -37.81, 5000, {.maxSpeed = 60});
 
     //Position to matchload
-    chassis.moveToPoint(-53.03, -46.98, 5000);
-    chassis.moveToPoint(-60.19, -46.98, 5000);
+    chassis.moveToPoint(-33.02, -37.81, 5000, {.forwards = false});
+    chassis.turnToHeading(39.95, 5000);
+    chassis.moveToPoint(-40.42, -47, 5000);
+    chassis.turnToHeading(270, 5000);
+    chassis.moveToPoint(-61.87, -47, 5000, {.maxSpeed = 60});
 };
 
 void skills_autonomous_right();

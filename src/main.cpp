@@ -132,7 +132,6 @@ void opcontrol() {
 
 // --- Autonomous ---
 void autonomous() {
-
     skills_autonomous_left();
 
     // drive_for_inches_consistent(80, 12);

@@ -10,3 +10,7 @@ void drive_for_inches_consistent(double maxSpeedVelocity, double inches);
 void drive_backward_consistent(double maxSpeedVelocity, double inches);
 void turn_time_consistent(double maxSpeedVelocity, int durationMs, bool turnLeft);
 void drive_arc_consistent(double maxSpeedVelocity, double inches, double ratio, bool turnLeft, bool forward);
+void eat_ball(double milliseconds, double velocity);
+void spit_ball(double milliseconds, double velocity);
+void get_matchload(double milliseconds, double velocity);
+void score_long_goal(double angle, double velocity);
