@@ -1,4 +1,5 @@
 #include "helpers.hpp"
+#include <cstdio>
 
 const double wheelDiameter = 3.25;
 const double trackWidth = 14.5;
@@ -364,8 +365,10 @@ void spit_ball(double milliseconds, double velocity){
     intake.move_velocity(0);
 }
 
-void get_matchload(double milliseconds, double velocity){
-    discore.move_absolute(-500, 200);
+void get_matchload(double milliseconds, double velocity, bool twoVtwoV2){
+    if(twoVtwoV2 == true){
+        discore.move_absolute(-500, 200);
+    }
     intake.move_velocity(-velocity);
     pros::delay(milliseconds);
 }
@@ -379,4 +382,16 @@ void score_long_goal(double angle, double velocity) {
     catapult_arm.move_absolute(-angle, velocity);
     pros::delay(500);
     catapult_arm.move_absolute(0, velocity);
+}
+
+void detect_wall_to_score(double targetInches) {
+    int distance = ultrasonic.get_value() / 25.4; // Convert mm to inches
+    printf("Distance: %d mm\n", distance);
+
+    if (distance < 100 && distance != -1) {
+        left_motor_group.move_velocity(0);
+        right_motor_group.move_velocity(0);
+    }
+
+    pros::delay(20); // Small delay to prevent CPU hogging
 }

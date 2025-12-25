@@ -1,8 +1,14 @@
 #include "robot_config.hpp"
 #include "helpers.hpp"
 
+void park2v2V2(){
+    chassis.turnToHeading(274.76, 5000);
+    chassis.moveToPoint(-61.63, -33.48, 5000);
+    chassis.turnToHeading(358.61, 5000);
+    chassis.moveToPoint(-62.43, -0.25, 5000, {.minSpeed = 127});
+}
+
 void skills_autonomous_left(){
-    chassis.calibrate();
     chassis.setPose(-62.636, 17.13, 0);
     
     //Score to upper center goal
@@ -76,7 +82,6 @@ void skills_autonomous_left(){
 };
 
 void twoVtwo_autonomous_right(){
-    chassis.calibrate();
     chassis.setPose(-62.90, -17.10, 0);
     //Score to lower center goal
     matchloader.move_absolute(-1700, 100);
@@ -94,14 +99,14 @@ void twoVtwo_autonomous_right(){
 
     //Score to long goal
     chassis.moveToPoint(-28.68, -47, 5000, {.forwards = false});
-    score_long_goal(600, 100);
+    score_long_goal(300, 100);
     intake.move_velocity(0);
 
     //Use discore to gain control zone
     chassis.moveToPoint(-40.42, -47.26, 5000);
     chassis.turnToHeading(38.08, 5000);
     chassis.moveToPoint(-33.02, -37.81, 5000);
-    chassis.turnToHeading(90, 0);
+    chassis.turnToHeading(90, 5000);
     chassis.moveToPoint(-14.13, -37.81, 5000, {.maxSpeed = 60});
 
     //Position to matchload
@@ -111,6 +116,46 @@ void twoVtwo_autonomous_right(){
     chassis.turnToHeading(270, 5000);
     chassis.moveToPoint(-61.87, -47, 5000, {.maxSpeed = 60});
 };
+
+void twoVtwo_autonomous_right_v2_blue(){
+    chassis.setPose(-62.90, -17.10, 0);
+    //Score to lower center goal
+    matchloader.move_absolute(-1700, 100);
+    chassis.moveToPoint(-17.03, -17.10, 5000);
+    chassis.turnToHeading(43.15, 5000);
+    chassis.moveToPoint(-12.91, -12.71, 5000);
+    spit_ball(1000, 200);
+
+    //Get the two balls near matchload
+    chassis.moveToPoint(-40.42, -47.26, 5000, {.forwards = false});
+    intake.move_velocity(-200);
+    discore.move_absolute(-500, 200);
+    chassis.turnToHeading(0, 5000);
+    chassis.moveToPoint(-46.89, -63.22, 5000);
+    intake.move_velocity(0);
+
+    //Get the matchload
+    chassis.turnToHeading(333.81, 5000);
+    matchloader.move_absolute(0, 100);
+    chassis.moveToPoint(-54.93, -46.88, 5000);
+    chassis.turnToHeading(270, 5000);
+    chassis.moveToPoint(-61.87, -47, 5000, {.maxSpeed = 60});   
+    get_matchload(3000, 200, true);
+
+    //Score to long goal
+    chassis.moveToPoint(-28.68, -47, 5000, {.forwards = false});
+    score_long_goal(300, 100);
+    intake.move_velocity(0);
+
+    //Use discore to gain control zone
+    chassis.moveToPoint(-40.42, -47.26, 5000);
+    chassis.turnToHeading(38.08, 5000);
+    chassis.moveToPoint(-33.02, -37.81, 5000);
+    chassis.turnToHeading(90, 5000);
+    chassis.moveToPoint(-14.13, -37.81, 5000, {.maxSpeed = 60});
+
+    park2v2V2();
+}
 
 void skills_autonomous_right();
 void twoVtwo_autonomous_left();
