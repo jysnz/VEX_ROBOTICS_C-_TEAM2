@@ -1,5 +1,5 @@
 #include "tasks.hpp"
-#include "helpers.cpp"
+#include "helpers.hpp"
 #include "liblvgl/display/lv_display.h"
 
 // Access global variables
@@ -119,7 +119,6 @@ void startTuningUI() {
     // 2. Setup Label
     pid_label = lv_label_create(lv_screen_active());
     lv_obj_align(pid_label, LV_ALIGN_BOTTOM_LEFT, 10, -5);
-    lv_label_set_recolor(pid_label, true);
 
     // 3. Update Task
     static pros::Task ui_task([]() {
@@ -132,7 +131,7 @@ void startTuningUI() {
 
             // Update Text
             lv_label_set_text_fmt(pid_label, 
-                "MODE: %s  TEST: #00FF00 %s#\nP:%.2f I:%.3f D:%.2f  StI:%.1f", 
+                "MODE: %s  TEST: %s\nP:%.2f I:%.3f D:%.2f  StI:%.1f", 
                 mode_name, test_names[test_index], tune_kp, tune_ki, tune_kd, tune_start_i);
 
             pros::delay(50);

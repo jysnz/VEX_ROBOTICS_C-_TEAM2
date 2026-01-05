@@ -1,0 +1,55 @@
+// Path
+
+forward(45.885, 30);
+turnTo(316.469, 30);
+backward(7.625, 30);
+turnTo(51.499, 30);
+forward(15.54, 30);
+turnTo(359.045, 30);
+forward(16.586, 30);
+turnTo(319.591, 30);
+backward(26.861, 30);
+turnTo(43.877, 30);
+backward(9.969, 30);
+turnTo(225.06, 30);
+backward(51.932, 30);
+turnTo(0, 30);
+forward(15.754, 30);
+turnTo(0, 30);
+backward(15.953, 30);
+turnTo(270, 30);
+backward(14.096, 30);
+turnTo(270, 30);
+forward(32.062, 30);
+turnTo(300.489, 30);
+backward(34.32, 30);
+turnTo(0, 30);
+backward(25.428, 30);
+turnTo(359.523, 30);
+backward(33.168, 30);
+turnTo(34.315, 30);
+backward(21.082, 30);
+turnTo(0, 30);
+backward(15.202, 30);
+turnTo(327.051, 30);
+forward(17.786, 30);
+turnTo(270, 30);
+forward(9.121, 30);
+turnTo(90, 30);
+forward(32.614, 30);
+turnTo(270, 30);
+forward(32.614, 30);
+turnTo(270, 30);
+backward(8.845, 30);
+turnTo(121.171, 30);
+backward(26.166, 30);
+turnTo(89.486, 30);
+backward(61.638, 30);
+turnTo(293.199, 30);
+forward(16.84, 30);
+turnTo(359.265, 30);
+forward(21.56, 30);
+turnTo(0, 30);
+
+
+#PATH.JERRYIO-DATA {"appVersion":"0.10.0","format":"Rigid Code Gen v0.1","gc":{"robotWidth":14.5,"robotHeight":14.5,"showRobot":false,"uol":2.54,"pointDensity":0.7874015748031495,"controlMagnetDistance":1.968503937007874,"fieldImage":{"displayName":"VURC 2026 - Push Back","signature":"VURC-PushBack-H2H-TopDownHighlighted-TileColor66_71","origin":{"__type":"built-in"}},"coordinateSystem":"VEX Gaming Positioning System","headingOutputType":"Absolute Heading","outputTemplate":"path: `// ${name}\n\n${code}\n`\nforward: `forward(${distance}, ${speed});`\nbackward: `backward(${distance}, ${speed});`\nturnLeft: `turnLeft(${heading}, ${speed});`\nturnRight: `turnRight(${heading}, ${speed});`\nturnTo: `turnTo(${heading}, ${speed});`"},"paths":[{"segments":[{"controls":[{"uid":"BZWRH6rKIP","x":-62.92981685910732,"y":16.713248676498395,"lock":false,"visible":true,"heading":89.30972280213493,"__type":"end-point"},{"uid":"oR7Lvjv2XF","x":-17.048482283126255,"y":17.26603584006443,"lock":false,"visible":true,"heading":316.4688007143858,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"EP6c5nW2IO"},{"controls":[{"uid":"oR7Lvjv2XF","x":-17.048482283126255,"y":17.26603584006443,"lock":false,"visible":true,"heading":316.4688007143858,"__type":"end-point"},{"uid":"cWJKEajpFA","x":-11.797004229248907,"y":11.738164204404065,"lock":false,"visible":true,"heading":51.49934627965455,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"z98mzqPhWF"},{"controls":[{"uid":"cWJKEajpFA","x":-11.797004229248907,"y":11.738164204404065,"lock":false,"visible":true,"heading":51.49934627965455,"__type":"end-point"},{"uid":"LNEYXySfdB","x":0.3643133692039023,"y":21.41193956680971,"lock":false,"visible":true,"heading":359.0451587461278,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"81pqVxXJym"},{"controls":[{"uid":"LNEYXySfdB","x":0.3643133692039023,"y":21.41193956680971,"lock":false,"visible":true,"heading":359.0451587461278,"__type":"end-point"},{"uid":"xb4qDEpOCk","x":0.08791978742088562,"y":37.99555447379082,"lock":false,"visible":true,"heading":319.59054318560607,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"vlkeTQnM63"},{"controls":[{"uid":"xb4qDEpOCk","x":0.08791978742088562,"y":37.99555447379082,"lock":false,"visible":true,"heading":319.59054318560607,"__type":"end-point"},{"uid":"w6HsyimRH7","x":17.500715439751044,"y":17.542429421847455,"lock":false,"visible":true,"heading":43.87669728592448,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"8svTb4Ejto"},{"controls":[{"uid":"w6HsyimRH7","x":17.500715439751044,"y":17.542429421847455,"lock":false,"visible":true,"heading":43.87669728592448,"__type":"end-point"},{"uid":"pBuAz3XPAJ","x":10.590875895175596,"y":10.356196295488974,"lock":false,"visible":true,"heading":225.06046159383973,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"mv1rNs4mJt"},{"controls":[{"uid":"pBuAz3XPAJ","x":10.590875895175596,"y":10.356196295488974,"lock":false,"visible":true,"heading":225.06046159383973,"__type":"end-point"},{"uid":"ZokMfvXRMF","x":47.351222272317045,"y":47.03904143080232,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"ZWum71MVaC"},{"controls":[{"uid":"ZokMfvXRMF","x":47.351222272317045,"y":47.03904143080232,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"T0CEen9ebs","x":47.351222272317045,"y":62.793475592434376,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"nqlSJgE8Z4"},{"controls":[{"uid":"T0CEen9ebs","x":47.351222272317045,"y":62.793475592434376,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"dAiF4CrRuE","x":47.351222272317045,"y":46.84014909084741,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"oYpYuYX3qx"},{"controls":[{"uid":"dAiF4CrRuE","x":47.351222272317045,"y":46.84014909084741,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"zTA9q9hThW","x":61.44729494325098,"y":46.84014909084741,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"TPN7ViciIj"},{"controls":[{"uid":"zTA9q9hThW","x":61.44729494325098,"y":46.84014909084741,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"maCcJJQAG2","x":29.385639456420837,"y":46.84014909084741,"lock":false,"visible":true,"heading":300.48894049983096,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"Pw0eISXwHT"},{"controls":[{"uid":"maCcJJQAG2","x":29.385639456420837,"y":46.84014909084741,"lock":false,"visible":true,"heading":300.48894049983096,"__type":"end-point"},{"uid":"HFjW8BlSj8","x":58.95975270720382,"y":29.427353438517247,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"1Vz74kSMyX"},{"controls":[{"uid":"HFjW8BlSj8","x":58.95975270720382,"y":29.427353438517247,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"2JANPMsi26","x":58.95975270720382,"y":3.9991439144795526,"lock":false,"visible":true,"heading":359.52254622269044,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"sU0Rt0o1Vu"},{"controls":[{"uid":"2JANPMsi26","x":58.95975270720382,"y":3.9991439144795526,"lock":false,"visible":true,"heading":359.52254622269044,"__type":"end-point"},{"uid":"pJxQpvxKQG","x":59.23614628898684,"y":-29.168085899482662,"lock":false,"visible":true,"heading":34.3150875999973,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"QFCGLkBsf2"},{"controls":[{"uid":"pJxQpvxKQG","x":59.23614628898684,"y":-29.168085899482662,"lock":false,"visible":true,"heading":34.3150875999973,"__type":"end-point"},{"uid":"PiJa5tG2w7","x":47.351222272317045,"y":-46.58088155181284,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"TuB5CEFLp0"},{"controls":[{"uid":"PiJa5tG2w7","x":47.351222272317045,"y":-46.58088155181284,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"y92YX6RO1o","x":47.351222272317045,"y":-61.78252854987884,"lock":false,"visible":true,"heading":327.0507848834095,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"jEpxQsRPJG"},{"controls":[{"uid":"y92YX6RO1o","x":47.351222272317045,"y":-61.78252854987884,"lock":false,"visible":true,"heading":327.0507848834095,"__type":"end-point"},{"uid":"YLiSgSnsWh","x":37.677446909911396,"y":-46.85727513359585,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"nH0LeqZtzB"},{"controls":[{"uid":"YLiSgSnsWh","x":37.677446909911396,"y":-46.85727513359585,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"UgkYhfXl6V","x":28.556458711071787,"y":-46.85727513359585,"lock":false,"visible":true,"heading":90,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"gWPgBXOBM2"},{"controls":[{"uid":"UgkYhfXl6V","x":28.556458711071787,"y":-46.85727513359585,"lock":false,"visible":true,"heading":90,"__type":"end-point"},{"uid":"enQEEVHYX9","x":61.17090136146797,"y":-46.85727513359585,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"P70scJP1fW"},{"controls":[{"uid":"enQEEVHYX9","x":61.17090136146797,"y":-46.85727513359585,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"lPRwrlLuca","x":28.556458711071787,"y":-46.85727513359585,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"2UxFjtG1oh"},{"controls":[{"uid":"lPRwrlLuca","x":28.556458711071787,"y":-46.85727513359585,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"9hemThRa4G","x":37.401053328128384,"y":-46.85727513359585,"lock":false,"visible":true,"heading":121.17134902771983,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"3NG9LwIEH4"},{"controls":[{"uid":"9hemThRa4G","x":37.401053328128384,"y":-46.85727513359585,"lock":false,"visible":true,"heading":121.17134902771983,"__type":"end-point"},{"uid":"A4rBqVlOLs","x":15.013173203703877,"y":-33.313989626227944,"lock":false,"visible":true,"heading":89.48615028364588,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"XgrhmJ4qxz"},{"controls":[{"uid":"A4rBqVlOLs","x":15.013173203703877,"y":-33.313989626227944,"lock":false,"visible":true,"heading":89.48615028364588,"__type":"end-point"},{"uid":"XA9hxa23tM","x":-46.62259553390923,"y":-33.866776789793974,"lock":false,"visible":true,"heading":293.1985905136481,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"J47Uj8YLub"},{"controls":[{"uid":"XA9hxa23tM","x":-46.62259553390923,"y":-33.866776789793974,"lock":false,"visible":true,"heading":293.1985905136481,"__type":"end-point"},{"uid":"vrDgLALetS","x":-62.10063611375826,"y":-27.233330827001545,"lock":false,"visible":true,"heading":359.26547896574516,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"sOAnESZK7y"},{"controls":[{"uid":"vrDgLALetS","x":-62.10063611375826,"y":-27.233330827001545,"lock":false,"visible":true,"heading":359.26547896574516,"__type":"end-point"},{"uid":"Daot0Lx16u","x":-62.37702969554128,"y":-5.6746314479260915,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"VvZhFBCXQW"}],"pc":{"speed":30},"name":"Path","uid":"PWK4KGpjvc","lock":false,"visible":true}]}

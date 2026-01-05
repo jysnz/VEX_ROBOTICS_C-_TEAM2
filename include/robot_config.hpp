@@ -7,6 +7,9 @@ extern const double trackWidth;
 extern const double ticksPerRev;
 extern const int MAX_VOLTAGE;
 
+void update_lateral_pid(float p, float i, float d);
+void update_angular_pid(float p, float i, float d);
+
 // --- Motors & Controllers ---
 extern pros::MotorGroup left_motor_group;
 extern pros::MotorGroup right_motor_group;

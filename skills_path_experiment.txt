@@ -1,0 +1,53 @@
+// Path
+
+forward(53.58, 30);
+turnTo(270.546, 30);
+backward(29.05, 30);
+turnTo(0, 30);
+backward(5.81, 30);
+turnTo(0, 30);
+forward(5.81, 30);
+turnTo(270, 30);
+backward(49.798, 30);
+turnTo(180, 30);
+backward(2.213, 30);
+turnTo(24.963, 30);
+backward(17.7, 30);
+turnTo(270, 30);
+forward(10.236, 30);
+turnTo(270, 30);
+backward(30.986, 30);
+turnTo(90, 30);
+backward(30.986, 30);
+turnTo(301.39, 30);
+backward(38.243, 30);
+turnTo(0, 30);
+backward(26.836, 30);
+turnTo(359.37, 30);
+backward(25.177, 30);
+turnTo(36.741, 30);
+backward(24.512, 30);
+turnTo(0.895, 30);
+backward(17.708, 30);
+turnTo(335.095, 30);
+forward(17.081, 30);
+turnTo(270, 30);
+forward(10.513, 30);
+turnTo(90, 30);
+forward(32.646, 30);
+turnTo(90, 30);
+backward(32.922, 30);
+turnTo(19.722, 30);
+forward(15.577, 30);
+turnTo(313.078, 30);
+forward(29.165, 30);
+turnTo(57.319, 30);
+backward(34.841, 30);
+turnTo(92.058, 30);
+backward(46.232, 30);
+turnTo(359.39, 30);
+forward(26.007, 30);
+turnTo(0, 30);
+
+
+#PATH.JERRYIO-DATA {"appVersion":"0.10.0","format":"Rigid Code Gen v0.1","gc":{"robotWidth":14.5,"robotHeight":14.5,"showRobot":false,"uol":2.54,"pointDensity":0.787,"controlMagnetDistance":1.968503937007874,"fieldImage":{"displayName":"VURC 2026 - Push Back","signature":"VURC-PushBack-H2H-TopDownHighlighted-TileColor66_71","origin":{"__type":"built-in"}},"coordinateSystem":"VEX Gaming Positioning System","headingOutputType":"Absolute Heading","outputTemplate":"path: `// ${name}\n\n${code}\n`\nforward: `forward(${distance}, ${speed});`\nbackward: `backward(${distance}, ${speed});`\nturnLeft: `turnLeft(${heading}, ${speed});`\nturnRight: `turnRight(${heading}, ${speed});`\nturnTo: `turnTo(${heading}, ${speed});`"},"paths":[{"segments":[{"controls":[{"uid":"FRJs4UKqR6","x":-62.88071439017483,"y":16.971789458241336,"lock":false,"visible":true,"heading":35.33133133891635,"__type":"end-point"},{"uid":"RAXv5iN2On","x":-31.895029635138794,"y":60.68373759481004,"lock":false,"visible":true,"heading":270.54565759341574,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"pi5SKpFYt0"},{"controls":[{"uid":"RAXv5iN2On","x":-31.895029635138794,"y":60.68373759481004,"lock":false,"visible":true,"heading":270.54565759341574,"__type":"end-point"},{"uid":"RkSYyH7foy","x":-2.845950177292509,"y":60.40707969521151,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"hz3hvBOaVB"},{"controls":[{"uid":"RkSYyH7foy","x":-2.845950177292509,"y":60.40707969521151,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"cCkibdt9AM","x":-2.845950177292509,"y":54.59726380364224,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"18opPNdSlV"},{"controls":[{"uid":"cCkibdt9AM","x":-2.845950177292509,"y":54.59726380364224,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"Ib0r11CgK2","x":-2.845950177292509,"y":60.40707969521151,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"BblBr0E3g1"},{"controls":[{"uid":"Ib0r11CgK2","x":-2.845950177292509,"y":60.40707969521151,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"3Bc1rtOXIe","x":46.95247175044399,"y":60.40707969521151,"lock":false,"visible":true,"heading":180,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"mGeqnxwlXT"},{"controls":[{"uid":"3Bc1rtOXIe","x":46.95247175044399,"y":60.40707969521151,"lock":false,"visible":true,"heading":180,"__type":"end-point"},{"uid":"jh3K2UPYrk","x":46.95247175044399,"y":62.62034289199979,"lock":false,"visible":true,"heading":24.962789830807026,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"nxUxvViMmY"},{"controls":[{"uid":"jh3K2UPYrk","x":46.95247175044399,"y":62.62034289199979,"lock":false,"visible":true,"heading":24.962789830807026,"__type":"end-point"},{"uid":"rEH7aZ8gt2","x":39.482708461283515,"y":46.5741847152847,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"laCqLt9skN"},{"controls":[{"uid":"rEH7aZ8gt2","x":39.482708461283515,"y":46.5741847152847,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"rLhFoQQZ1G","x":29.246366176137673,"y":46.5741847152847,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"zE2FFP9qfy"},{"controls":[{"uid":"rLhFoQQZ1G","x":29.246366176137673,"y":46.5741847152847,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"uxwEzNZtiB","x":60.23205093117372,"y":46.5741847152847,"lock":false,"visible":true,"heading":90,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"X3UBf4nkbJ"},{"controls":[{"uid":"uxwEzNZtiB","x":60.23205093117372,"y":46.5741847152847,"lock":false,"visible":true,"heading":90,"__type":"end-point"},{"uid":"O21BrtInlT","x":29.246366176137673,"y":46.5741847152847,"lock":false,"visible":true,"heading":301.3902681041878,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"OweUjrFQbk"},{"controls":[{"uid":"O21BrtInlT","x":29.246366176137673,"y":46.5741847152847,"lock":false,"visible":true,"heading":301.3902681041878,"__type":"end-point"},{"uid":"GNC0FjWxpB","x":61.89199832876494,"y":26.654815944190098,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"7LD4gt4AhM"},{"controls":[{"uid":"GNC0FjWxpB","x":61.89199832876494,"y":26.654815944190098,"lock":false,"visible":true,"heading":0,"__type":"end-point"},{"uid":"H0zNuEtyu2","x":61.89199832876494,"y":-0.181000316867899,"lock":false,"visible":true,"heading":359.3704013915898,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"piP0BdnniB"},{"controls":[{"uid":"H0zNuEtyu2","x":61.89199832876494,"y":-0.181000316867899,"lock":false,"visible":true,"heading":359.3704013915898,"__type":"end-point"},{"uid":"8pxmcOm4lQ","x":62.16865622836347,"y":-25.356869180334673,"lock":false,"visible":true,"heading":36.74056202012122,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"poclbrEEgp"},{"controls":[{"uid":"8pxmcOm4lQ","x":62.16865622836347,"y":-25.356869180334673,"lock":false,"visible":true,"heading":36.74056202012122,"__type":"end-point"},{"uid":"pm99pLM4qN","x":47.505787549641056,"y":-44.99958005183074,"lock":false,"visible":true,"heading":0.8951737102110542,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"75qh5jwMy2"},{"controls":[{"uid":"pm99pLM4qN","x":47.505787549641056,"y":-44.99958005183074,"lock":false,"visible":true,"heading":0.8951737102110542,"__type":"end-point"},{"uid":"B65wgCJUu6","x":47.22912965004252,"y":-62.70568562613705,"lock":false,"visible":true,"heading":335.09523119190476,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"xtTHe1tImv"},{"controls":[{"uid":"B65wgCJUu6","x":47.22912965004252,"y":-62.70568562613705,"lock":false,"visible":true,"heading":335.09523119190476,"__type":"end-point"},{"uid":"0xEv8pcZyR","x":40.03602426048058,"y":-47.21284324861903,"lock":false,"visible":true,"heading":270,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"Sn4zvM9Nd9"},{"controls":[{"uid":"0xEv8pcZyR","x":40.03602426048058,"y":-47.21284324861903,"lock":false,"visible":true,"heading":270,"__type":"end-point"},{"uid":"lJCS7Tc4Sz","x":29.523024075736224,"y":-47.21284324861903,"lock":false,"visible":true,"heading":90,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"dCig9t7gZq"},{"controls":[{"uid":"lJCS7Tc4Sz","x":29.523024075736224,"y":-47.21284324861903,"lock":false,"visible":true,"heading":90,"__type":"end-point"},{"uid":"XjOBpMKW73","x":62.16865622836347,"y":-47.21284324861903,"lock":false,"visible":true,"heading":90,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"eaj34Jk3uS"},{"controls":[{"uid":"XjOBpMKW73","x":62.16865622836347,"y":-47.21284324861903,"lock":false,"visible":true,"heading":90,"__type":"end-point"},{"uid":"RFL3iETRzt","x":29.246366176137673,"y":-47.21284324861903,"lock":false,"visible":true,"heading":19.722277764447043,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"c00m4S8pJo"},{"controls":[{"uid":"RFL3iETRzt","x":29.246366176137673,"y":-47.21284324861903,"lock":false,"visible":true,"heading":19.722277764447043,"__type":"end-point"},{"uid":"mSFRDRZg2b","x":34.50286626850986,"y":-32.54997456989661,"lock":false,"visible":true,"heading":313.07804404106855,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"EglADYdgAq"},{"controls":[{"uid":"mSFRDRZg2b","x":34.50286626850986,"y":-32.54997456989661,"lock":false,"visible":true,"heading":313.07804404106855,"__type":"end-point"},{"uid":"r6U6LAmqaX","x":13.200207999422583,"y":-12.630605798802012,"lock":false,"visible":true,"heading":57.319445256636584,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"uss3UbIvPa"},{"controls":[{"uid":"r6U6LAmqaX","x":13.200207999422583,"y":-12.630605798802012,"lock":false,"visible":true,"heading":57.319445256636584,"__type":"end-point"},{"uid":"yc6NXUTce7","x":-16.125529358022234,"y":-31.44334297150247,"lock":false,"visible":true,"heading":92.05764594694824,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"FRthhjswJ6"},{"controls":[{"uid":"yc6NXUTce7","x":-16.125529358022234,"y":-31.44334297150247,"lock":false,"visible":true,"heading":92.05764594694824,"__type":"end-point"},{"uid":"6kRUUUIWST","x":-62.32739859097775,"y":-29.78339557391125,"lock":false,"visible":true,"heading":359.39049342332476,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"F4tTarb3LT"},{"controls":[{"uid":"6kRUUUIWST","x":-62.32739859097775,"y":-29.78339557391125,"lock":false,"visible":true,"heading":359.39049342332476,"__type":"end-point"},{"uid":"sZBMvlVn2D","x":-62.60405649057629,"y":-3.7775530116488625,"lock":false,"visible":true,"heading":0,"__type":"end-point"}],"speedProfiles":[],"lookaheadKeyframes":[],"uid":"xbcflYqFWb"}],"pc":{"speed":30},"name":"Path","uid":"RGxY8RJKN4","lock":false,"visible":true}]}

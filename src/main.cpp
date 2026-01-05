@@ -2,7 +2,6 @@
 #include "robot_config.hpp"
 #include "helpers.hpp"
 #include "tasks.hpp"
-#include "robot_config.cpp"
 #include "autons.hpp"
 
 // --- Initialize ---
@@ -11,7 +10,6 @@ void initialize() {
     chassis.calibrate();
     matchloader.move_absolute(-1700, 100);
     pros::Task odo(odometryTask);
-    //startScreenTask();
 }
 
 // --- Operator Control ---
@@ -53,14 +51,6 @@ void opcontrol() {
                 // --- LATERAL SEQUENCE: 2 Steps Forward, then Back to Start ---
                 // Step 1: Forward 12 inches
                 chassis.moveToPoint(0, 12, 1500, {.forwards = true});
-                chassis.waitUntilDone();
-                pros::delay(200); // Pause to see the graph settle
-
-                // Step 2: Forward another 12 inches (Total 24)
-                chassis.moveToPoint(0, 24, 1500, {.forwards = true});
-                chassis.waitUntilDone();
-                pros::delay(200);
-
                 // Step 3: Back to 0
                 chassis.moveToPoint(0, 0, 2000, {.forwards = false});
             } 
@@ -132,7 +122,7 @@ void opcontrol() {
 
 // --- Autonomous ---
 void autonomous() {
-    skills_autonomous_left();
+    twoVtwo_autonomous_right();
 
     // drive_for_inches_consistent(80, 12);
 
