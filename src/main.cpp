@@ -100,12 +100,12 @@ void opcontrol() {
 
         // if (catapultArm){
         //     catapult_arm.move_absolute(-600, 400);
-        //     discore.move_velocity(0);
+        //     discore.move_absolute(0, 200); 
         // } 
         // else catapult_arm.move_absolute(0, 400);
 
         // if (discoreDown) {
-        //     discore.move_velocity(0);
+        //     discore.move_absolute(0, 200);
         // }
         // else if (discoreUp) discore.move_absolute(-500, 200);
 
