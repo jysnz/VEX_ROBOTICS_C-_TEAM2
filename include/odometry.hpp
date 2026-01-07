@@ -33,8 +33,9 @@ extern int sideways_odom_raw;
 void start_odom();
 void setPose(double newX, double newY, double newTheta);
 void driveToPointWithLogging(double targetX, double targetY, double timeout);
-void drawPIDGraph(double error, int timeStep);
-void driveForwardPID(double targetDistance, double timeout);
-void turnToAnglePID(double targetAngleDeg, double timeout);
+void drawPIDGraph(double error, int timeStep, bool isTurning);
+void driveForwardPID(double targetDistance, double maxSpeed, double timeout);
+void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout);
+double get_smooth_error(double target, double start);
 
 #endif

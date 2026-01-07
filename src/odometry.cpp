@@ -32,13 +32,12 @@ void AS5600::update() {
     int current_raw = sensor.get_value();
     int delta = current_raw - last_raw;
 
-    // Handle wrap-around (0 to 4095)
     if (delta > 2048) delta -= 4096;
     else if (delta < -2048) delta += 4096;
 
-    // Deadband Filter: Only move if delta is significant
-    if (std::abs(delta) > DEADBAND) {
-        total_ticks += delta;
+    if (std::abs(delta) > 10) { // Increased deadband for analog noise
+        // IF THE ROBOT MOVES BACKWARD, CHANGE += TO -= BELOW
+        total_ticks -= delta; 
         last_raw = current_raw;
     }
 }
@@ -103,15 +102,39 @@ void odom_task_fn() {
     }
 }
 
-void drawPIDGraph(double error, int timeStep) {
-    // Map the error to screen coordinates (Screen is 480x240)
-    int yPos = 120 - (int)(error * 5); // 5 pixels per inch
-    int xPos = (timeStep % 480);       // Move across the screen
-
-    if (xPos == 0) pros::screen::erase(); // Clear screen for next pass
+void drawPIDGraph(double error, int timeStep, bool isTurning) {
+    int centerLine = 120; // Middle of the 240px screen
+    int yPos;
     
-    pros::screen::set_pen(0x00FF00); // Green color for PID graph
+    // SCALE CHECK: 
+    // If error is 24 inches, 24 * 4 = 96. 120 - 96 = 24 (Visible).
+    // If error is 50 inches, 50 * 4 = 200. 120 - 200 = -80 (INVISIBLE!).
+    if (isTurning) {
+        yPos = centerLine - (int)(error * (180.0 / M_PI) * 1.0); // 1px per degree
+    } else {
+        yPos = centerLine - (int)(error * 4.0); // 4px per inch
+    }
+
+    // CLAMPING: Ensures the pixel is ALWAYS on the screen
+    if (yPos < 2) yPos = 2;
+    if (yPos > 237) yPos = 237;
+
+    int xPos = (timeStep % 480); // Wrap around the 480px width
+
+    // Only erase the screen when we wrap back to the start (xPos 0)
+    if (xPos == 0) {
+        pros::screen::erase();
+        // Redraw the center target line after erasing
+        pros::screen::set_pen(0xFFFFFF); // White
+        pros::screen::draw_line(0, centerLine, 480, centerLine);
+    }
+    
+    // Draw the Error Pixel
+    pros::screen::set_pen(0x00FF00); // Bright Green
     pros::screen::draw_pixel(xPos, yPos);
+    
+    // Draw a small vertical bar instead of a single pixel to make it easier to see
+    pros::screen::draw_line(xPos, yPos - 1, xPos, yPos + 1);
 }
 
 void setPose(double newX, double newY, double newTheta) {
@@ -126,87 +149,93 @@ void setPose(double newX, double newY, double newTheta) {
     sideways_odom.reset();
 }
 
-void driveForwardPID(double targetDistance, double timeout) {
-    // --- TUNING AREA: LINEAR CONSTANTS ---
-    double kP = 0.0; // Start here
-    double kI = 0.0; 
-    double kD = 0.0;
-    double startI = 0.0; // The error threshold to start integrating
-    // ------------------------------------
-
-    double error = 0, prevError = 0, integral = 0, derivative = 0;
-    uint32_t startTime = pros::millis();
+// Inside driveForwardPID
+double get_smooth_error(double target, double start) {
+    static double history[5] = {0,0,0,0,0};
+    double current = target - (forward_odom.get_inches(2.75) - start);
     
-    // Reset sensors to track distance from "now"
+    // Shift history
+    for(int i=4; i>0; i--) history[i] = history[i-1];
+    history[0] = current;
+
+    // Average the last 5 readings
+    double sum = 0;
+    for(int i=0; i<5; i++) sum += history[i];
+    return sum / 5.0;
+}
+
+// --- PID MOVEMENT ---
+void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
+    const double kP = 3.5;      // MUCH LOWER to stop vibration
+    const double kD = 5.0;      // Higher to "dampen" the noise
+    const double kMin = 18.0;   
+    
+    double error = 0, prevError = 0;
+    uint32_t startTime = pros::millis();
     double startForward = forward_odom.get_inches(2.75);
+    int timeStep = 0;
+
+    // Draw the initial center line
+    pros::screen::set_pen(0xFFFFFF);
+    pros::screen::draw_line(0, 120, 480, 120);
 
     while (pros::millis() - startTime < timeout) {
-        double currentDist = forward_odom.get_inches(2.75) - startForward;
-        error = targetDistance - currentDist;
+        // Use the smoothed error to stop the "back and forth"
+        error = get_smooth_error(targetDistance, startForward);
 
-        if (std::abs(error) < 0.25) break; // Exit condition
+        if (std::abs(error) < 0.6) break; 
 
-        // Integral Logic
-        if (std::abs(error) < startI) {
-            integral += error;
-        } else {
-            integral = 0;
-        }
+        double derivative = error - prevError;
+        double power = (error * kP) + (derivative * kD);
 
-        derivative = error - prevError;
-        double power = (error * kP) + (integral * kI) + (derivative * kD);
+        // Anti-Vibration: If power is tiny, just stop
+        if (std::abs(power) < 6.0) power = 0;
+        else if (std::abs(power) < kMin) power = (error > 0) ? kMin : -kMin;
+
+        if (power > maxSpeed) power = maxSpeed;
+        if (power < -maxSpeed) power = -maxSpeed;
 
         left_motor_group.move_velocity(power);
         right_motor_group.move_velocity(power);
 
-        printf("Time: %d | Error: %.2f | Power: %.2f\n", (int)(pros::millis() - startTime), error, power);
-
+        drawPIDGraph(error, timeStep++, false);
+        
         prevError = error;
         pros::delay(20);
     }
-    left_motor_group.move_velocity(0);
+    left_motor_group.move_velocity(0); 
     right_motor_group.move_velocity(0);
 }
 
-void turnToAnglePID(double targetAngleDeg, double timeout) {
-    // --- TUNING AREA: ANGULAR CONSTANTS ---
-    double kP_ang = 0.0; 
-    double kI_ang = 0.0;
-    double kD_ang = 0.0;
-    double startI_ang = 0.0; 
-    // --------------------------------------
-
-    double error = 0, prevError = 0, integral = 0, derivative = 0;
+void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
+    double kP = 40.0, kI = 0.0, kD = 5.0, startI = 10.0 * (M_PI/180.0);
+    double error = 0, prevError = 0, integral = 0;
     uint32_t startTime = pros::millis();
-    double targetRad = targetAngleDeg * (M_PI / 180.0);
+    double targetRad = targetAngleDeg * (M_PI/180.0);
+    int timeStep = 0;
 
     while (pros::millis() - startTime < timeout) {
-        // Calculate shortest path for the turn
         error = targetRad - robot_theta;
         while (error > M_PI) error -= 2 * M_PI;
         while (error < -M_PI) error += 2 * M_PI;
+        if (std::abs(error) < (1.0 * M_PI/180.0)) break;
 
-        if (std::abs(error) < (1.0 * M_PI / 180.0)) break; // Stop within 1 degree
+        if (std::abs(error) < startI) integral += error; else integral = 0;
+        double derivative = error - prevError;
+        double power = (error * kP) + (integral * kI) + (derivative * kD);
 
-        if (std::abs(error) < startI_ang) {
-            integral += error;
-        } else {
-            integral = 0;
-        }
-
-        derivative = error - prevError;
-        double power = (error * kP_ang) + (integral * kI_ang) + (derivative * kD_ang);
+        if (power > maxSpeed) power = maxSpeed;
+        if (power < -maxSpeed) power = -maxSpeed;
 
         left_motor_group.move_velocity(power);
-        right_motor_group.move_velocity(-power); // Opposite power for point turn
+        right_motor_group.move_velocity(-power);
 
-        printf("AngError(Deg): %.2f | Power: %.2f\n", error * (180.0 / M_PI), power);
-
+        drawPIDGraph(error, timeStep, true);
+        timeStep++;
         prevError = error;
         pros::delay(20);
     }
-    left_motor_group.move_velocity(0);
-    right_motor_group.move_velocity(0);
+    left_motor_group.move_velocity(0); right_motor_group.move_velocity(0);
 }
 
 

@@ -122,7 +122,7 @@ void opcontrol() {
 
 // --- Autonomous ---
 void autonomous() {
-    twoVtwo_autonomous_right();
+    hardCoded2v2Auton();
 
     // drive_for_inches_consistent(80, 12);
 
