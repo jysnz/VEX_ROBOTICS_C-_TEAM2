@@ -566,10 +566,6 @@ void autonomous() {
     driveToPointWithLogging(0, 12, 3000);
     void drawPIDGraph(double error, int timeStep);
 
-
-
-    //2v2 
-
     // //Move to lower center goal
     // matchloader.move_absolute(-1700, 100);
     // drive_for_inches(80, 21.5); 
