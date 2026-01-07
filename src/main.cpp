@@ -351,7 +351,7 @@ void turn_left(double ms){
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
-    matchloader.move_absolute(-1700, 100);
+    matchloader.move_absolute(-1550, 100);
 
     static pros::Task odoTask(odometryTask);
 
@@ -461,8 +461,11 @@ void opcontrol() {
         right_motor_group.move(rightMotorSpeed);
 
         if (catapultArm){
-            catapult_arm.move_absolute(-600, 400);
+            catapult_arm.move_absolute(-600, 30); 
             discore.move_absolute(0, 200);
+            intake.move_velocity(-200);
+            pros::delay(300);
+            intake.move_velocity(0);
         } 
         else catapult_arm.move_absolute(0, 400);
 
@@ -472,7 +475,7 @@ void opcontrol() {
         else if (discoreUp) discore.move_absolute(800, 200);
 
         if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(0, 100);
-        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1700, 100);
+        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1550, 100);
 
         if (intakeForward && !intakeReverse) intake.move_velocity(200);
         else if (intakeReverse && !intakeForward) intake.move_velocity(-200);
