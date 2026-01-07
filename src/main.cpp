@@ -469,7 +469,7 @@ void opcontrol() {
         if (discoreDown) {
             discore.move_absolute(0, 200);
         }
-        else if (discoreUp) discore.move_absolute(-500, 200);
+        else if (discoreUp) discore.move_absolute(800, 200);
 
         if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(0, 100);
         else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1700, 100);
