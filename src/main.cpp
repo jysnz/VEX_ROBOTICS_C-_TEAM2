@@ -351,7 +351,7 @@ void turn_left(double ms){
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
-    matchloader.move_absolute(-1550, 100);
+    matchloader.move_absolute(-1500, 100);
 
     static pros::Task odoTask(odometryTask);
 
@@ -475,7 +475,7 @@ void opcontrol() {
         else if (discoreUp) discore.move_absolute(800, 200);
 
         if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(0, 100);
-        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1550, 100);
+        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1500, 100);
 
         if (intakeForward && !intakeReverse) intake.move_velocity(200);
         else if (intakeReverse && !intakeForward) intake.move_velocity(-200);
