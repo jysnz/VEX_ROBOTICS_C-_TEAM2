@@ -1,6 +1,10 @@
 #include "robot_config.hpp"
 #include "helpers.hpp"
 
+void AS5600_autonSkills(){
+    
+}
+
 void park2v2V2(){
     chassis.turnToHeading(274.76, 5000);
     chassis.moveToPoint(-61.63, -33.48, 5000);
