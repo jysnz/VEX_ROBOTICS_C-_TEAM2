@@ -499,9 +499,9 @@ void opcontrol() {
 
     while (true) {
         
-        pros::lcd::print(0, "X: %f", robot_x);
+        // pros::lcd::print(0, "X: %f", robot_x);
         pros::lcd::print(1, "Y: %f", robot_y);
-        pros::lcd::print(2, "Theta: %f", robot_theta * (180/M_PI)); // Convert to degrees
+        // pros::lcd::print(2, "Theta: %f", robot_theta * (180/M_PI)); // Convert to degrees
         pros::delay(20);
 
         bool intakeForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);

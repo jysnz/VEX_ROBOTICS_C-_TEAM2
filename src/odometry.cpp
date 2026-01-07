@@ -17,8 +17,8 @@ AS5600 sideways_odom('C');
 
 // --- PHYSICAL CONSTANTS (ADJUST THESE) ---
 const double WHEEL_DIAMETER = 3.2; 
-const double FORWARD_OFFSET = -0.66;  // Dist from center to forward wheel (inches)
-const double HEADING_OFFSET = 1.64; // Dist from center to heading wheel (inches)
+const double FORWARD_OFFSET = 1.64;  // Dist from center to forward wheel (inches)
+const double HEADING_OFFSET = -0.66 ; // Dist from center to heading wheel (inches)
 const double SIDEWAYS_OFFSET = 6.55; // Dist from center to sideways wheel (inches)
 const double TRACK_WIDTH = FORWARD_OFFSET - HEADING_OFFSET; //
 
