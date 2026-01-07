@@ -8,6 +8,7 @@
 #include "pros/rtos.hpp"
 #include <algorithm>
 #include <cmath>
+#include "odometry.hpp"
 
 ASSET(path_jerryio_txt);
 
@@ -347,83 +348,148 @@ void turn_left(double ms){
     right_motor_group.move(0);
 }
 
+void driveToPointWithLogging(double targetX, double targetY, double timeout) {
+    const double kP_linear = 10; 
+    const double kD_linear = 7;
+    const double kP_angular = 3; 
+
+    double prevLinearError = 0;
+    uint32_t startTime = pros::millis();
+
+    printf("Time(ms),LinearError(in),Power\n");
+
+    while (pros::millis() - startTime < timeout) {
+        double dx = targetX - robot_x;
+        double dy = targetY - robot_y;
+        
+        // 1. Calculate Distance
+        double distance = std::sqrt(dx * dx + dy * dy);
+
+        // 2. IMPORTANT: Calculate Directional Error
+        // This allows the robot to know if the target is BEHIND it.
+        double angleToTarget = std::atan2(dx, dy);
+        double relativeAngle = angleToTarget - robot_theta;
+
+        // Normalize relativeAngle to (-PI to PI)
+        while (relativeAngle > M_PI) relativeAngle -= 2 * M_PI;
+        while (relativeAngle < -M_PI) relativeAngle += 2 * M_PI;
+
+        // If the target is behind the robot, we reverse the distance and flip the angle
+        double linearError = distance;
+        if (std::abs(relativeAngle) > M_PI / 2) {
+            linearError = -distance;
+            relativeAngle = (relativeAngle > 0) ? (relativeAngle - M_PI) : (relativeAngle + M_PI);
+        }
+
+        // 3. Exit Condition (Check absolute distance)
+        if (distance < 0.75) break;
+
+        // 4. PID Math
+        double derivative = linearError - prevLinearError;
+        double linearPower = (linearError * kP_linear) + (derivative * kD_linear);
+        double angularPower = relativeAngle * kP_angular;
+
+        // 5. Motor Power Calculation (Capped for move_velocity)
+        double leftPower = linearPower + angularPower;
+        double rightPower = linearPower - angularPower;
+
+        // Apply to drivetrain
+        left_motor_group.move_velocity(leftPower);
+        right_motor_group.move_velocity(rightPower);
+
+        printf("%d, %.2f, %.2f\n", (int)(pros::millis() - startTime), linearError, linearPower);
+
+        prevLinearError = linearError;
+        pros::delay(20);
+    }
+
+    // MANDATORY: Stop motors
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+    printf("Finished. Final X: %.2f, Y: %.2f\n", robot_x, robot_y);
+}
+
+
 // --- Initialize ---
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
     matchloader.move_absolute(-1500, 100);
+    setPose(0, 0, 0);
+    start_odom();
 
     static pros::Task odoTask(odometryTask);
+    
 
-    static pros::Task screen_task([]() {
-        const int P_X = 240;
-        const int P_W = 240;
-        const int BG_COLOR = 0x202020;
+    // static pros::Task screen_task([]() {
+    //     const int P_X = 240;
+    //     const int P_W = 240;
+    //     const int BG_COLOR = 0x202020;
 
-        while (true) {
-            pros::screen::set_pen(BG_COLOR);
-            pros::screen::fill_rect(P_X, 0, 480, 240);
+    //     while (true) {
+    //         pros::screen::set_pen(BG_COLOR);
+    //         pros::screen::fill_rect(P_X, 0, 480, 240);
 
-            double bat = pros::battery::get_capacity();
-            int bat_y = 20;
-            int bat_h = 30;
-            int bat_w = 70;
-            int icon_x = P_X + 130;
+    //         double bat = pros::battery::get_capacity();
+    //         int bat_y = 20;
+    //         int bat_h = 30;
+    //         int bat_w = 70;
+    //         int icon_x = P_X + 130;
 
-            pros::screen::set_pen(0xFFFFFF);
-            pros::screen::print(pros::E_TEXT_LARGE, P_X + 10, bat_y + 3, "BAT: %3.0f%%", bat);
+    //         pros::screen::set_pen(0xFFFFFF);
+    //         pros::screen::print(pros::E_TEXT_LARGE, P_X + 10, bat_y + 3, "BAT: %3.0f%%", bat);
 
-            uint32_t bat_col = (bat > 60) ? 0x00FFFF : (bat > 30 ? 0xFFA500 : 0xFF0000);
-            pros::screen::set_pen(0xFFFFFF);
-            pros::screen::draw_rect(icon_x, bat_y, icon_x + bat_w, bat_y + bat_h);
-            pros::screen::fill_rect(icon_x + bat_w, bat_y + 8, icon_x + bat_w + 5, bat_y + bat_h - 8);
+    //         uint32_t bat_col = (bat > 60) ? 0x00FFFF : (bat > 30 ? 0xFFA500 : 0xFF0000);
+    //         pros::screen::set_pen(0xFFFFFF);
+    //         pros::screen::draw_rect(icon_x, bat_y, icon_x + bat_w, bat_y + bat_h);
+    //         pros::screen::fill_rect(icon_x + bat_w, bat_y + 8, icon_x + bat_w + 5, bat_y + bat_h - 8);
 
-            int fill = (int)((bat / 100.0) * (bat_w - 4));
-            pros::screen::set_pen(bat_col);
-            pros::screen::fill_rect(icon_x + 2, bat_y + 2, icon_x + 2 + fill, bat_y + bat_h - 2);
+    //         int fill = (int)((bat / 100.0) * (bat_w - 4));
+    //         pros::screen::set_pen(bat_col);
+    //         pros::screen::fill_rect(icon_x + 2, bat_y + 2, icon_x + 2 + fill, bat_y + bat_h - 2);
 
-            auto drawRow = [&](int row_idx, const char* label, double temp) {
-                int row_h = 40;
-                int start_y = 70;
-                int y = start_y + (row_idx * row_h);
+    //         auto drawRow = [&](int row_idx, const char* label, double temp) {
+    //             int row_h = 40;
+    //             int start_y = 70;
+    //             int y = start_y + (row_idx * row_h);
 
-                pros::screen::set_pen(0xFFFFFF);
-                pros::screen::print(pros::E_TEXT_MEDIUM, P_X + 10, y + 8, label);
+    //             pros::screen::set_pen(0xFFFFFF);
+    //             pros::screen::print(pros::E_TEXT_MEDIUM, P_X + 10, y + 8, label);
 
-                int bar_x = P_X + 80;
-                int bar_w = 100;
-                int bar_h = 16;
-                int bar_y = y + 6;
+    //             int bar_x = P_X + 80;
+    //             int bar_w = 100;
+    //             int bar_h = 16;
+    //             int bar_y = y + 6;
 
-                pros::screen::set_pen(0x404040);
-                pros::screen::fill_rect(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h);
+    //             pros::screen::set_pen(0x404040);
+    //             pros::screen::fill_rect(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h);
 
-                double stress = temp / 60.0;
-                if(stress > 1.0) stress = 1.0;
-                int fill_w = (int)(stress * bar_w);
+    //             double stress = temp / 60.0;
+    //             if(stress > 1.0) stress = 1.0;
+    //             int fill_w = (int)(stress * bar_w);
 
-                uint32_t col = 0x00FF00;
-                if(temp > 45) col = 0xFFA500;
-                if(temp > 55) col = 0xFF0000;
+    //             uint32_t col = 0x00FF00;
+    //             if(temp > 45) col = 0xFFA500;
+    //             if(temp > 55) col = 0xFF0000;
 
-                pros::screen::set_pen(col);
-                pros::screen::fill_rect(bar_x, bar_y, bar_x + fill_w, bar_y + bar_h);
+    //             pros::screen::set_pen(col);
+    //             pros::screen::fill_rect(bar_x, bar_y, bar_x + fill_w, bar_y + bar_h);
 
-                pros::screen::set_pen(0xFFFFFF);
-                pros::screen::print(pros::E_TEXT_SMALL, bar_x + bar_w + 10, y + 8, "%.0fC", temp);
-            };
+    //             pros::screen::set_pen(0xFFFFFF);
+    //             pros::screen::print(pros::E_TEXT_SMALL, bar_x + bar_w + 10, y + 8, "%.0fC", temp);
+    //         };
 
-            double d_temp = (left_motor_group.get_temperature() + right_motor_group.get_temperature()) / 2.0;
+    //         double d_temp = (left_motor_group.get_temperature() + right_motor_group.get_temperature()) / 2.0;
 
-            drawRow(0, "Drive",  d_temp);
-            drawRow(1, "Cata",   catapult_arm.get_temperature());
-            drawRow(2, "Intake", intake.get_temperature());
-            drawRow(3, "Load",   matchloader.get_temperature());
-            drawRow(4, "Disc", discore.get_temperature());
+    //         drawRow(0, "Drive",  d_temp);
+    //         drawRow(1, "Cata",   catapult_arm.get_temperature());
+    //         drawRow(2, "Intake", intake.get_temperature());
+    //         drawRow(3, "Load",   matchloader.get_temperature());
+    //         drawRow(4, "Disc", discore.get_temperature());
 
-            pros::delay(200);
-        }
-    });
+    //         pros::delay(200);
+    //     }
+    // });
 }
 
 // --- Operator Control ---
@@ -432,6 +498,12 @@ void opcontrol() {
     static bool controlsReversed = false;
 
     while (true) {
+        
+        pros::lcd::print(0, "X: %f", robot_x);
+        pros::lcd::print(1, "Y: %f", robot_y);
+        pros::lcd::print(2, "Theta: %f", robot_theta * (180/M_PI)); // Convert to degrees
+        pros::delay(20);
+
         bool intakeForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
         bool intakeReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
         bool intakePause = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
@@ -461,7 +533,7 @@ void opcontrol() {
         right_motor_group.move(rightMotorSpeed);
 
         if (catapultArm){
-            catapult_arm.move_absolute(-600, 30); 
+            catapult_arm.move_absolute(-600, 40); 
             discore.move_absolute(0, 200);
             intake.move_velocity(-200);
             pros::delay(300);
@@ -474,8 +546,8 @@ void opcontrol() {
         }
         else if (discoreUp) discore.move_absolute(800, 200);
 
-        if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(0, 100);
-        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1500, 100);
+        if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(-100, 100);
+        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1400, 100);
 
         if (intakeForward && !intakeReverse) intake.move_velocity(200);
         else if (intakeReverse && !intakeForward) intake.move_velocity(-200);
@@ -488,42 +560,52 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    //Move to lower center goal
-    matchloader.move_absolute(-1700, 100);
-    drive_for_inches(80, 21.5); 
+    setPose(0, 0, 0);
+    // Drive to a point 24 inches forward and 12 inches right
+    // Timeout of 3000ms (3 seconds)
+    driveToPointWithLogging(0, 12, 3000);
+    void drawPIDGraph(double error, int timeStep);
 
-    //Turn left to lower center goal
-    right_motor_group.move(100);
-    pros::delay(270);
-    right_motor_group.move(0);
 
-    //Score to lower center goal the payload
-    intake.move_velocity(100);
-    pros::delay(2000);
-    intake.move_velocity(0);
 
-    //Move to matchload
-    drive_backward_for_inches(80, 16.5);
-    matchloader.move_absolute(0, 100);
+    //2v2 
 
-    //Turn left to face the matchload
-    left_motor_group.move(-100);
-    pros::delay(730);
-    left_motor_group.move(0);
+    // //Move to lower center goal
+    // matchloader.move_absolute(-1700, 100);
+    // drive_for_inches(80, 21.5); 
 
-    //Get the matchload
-    drive_for_inches(80, 8.8);
-    intake.move_velocity(-200);
-    discore.move_absolute(-650, 200);
-    pros::delay(7000);
-    intake.move_velocity(0);
+    // //Turn left to lower center goal
+    // right_motor_group.move(100);
+    // pros::delay(270);
+    // right_motor_group.move(0);
 
-    //Score to long goal
-    drive_backward_for_inches(60, 13);
-    pros::delay(1000);
+    // //Score to lower center goal the payload
+    // intake.move_velocity(100);
+    // pros::delay(2000);
+    // intake.move_velocity(0);
 
-    fire_catapult_safe(2);
-    discore.move_velocity(0);
-    pros::delay(1000);
-    catapult_arm.move_absolute(0, 400);
+    // //Move to matchload
+    // drive_backward_for_inches(80, 16.5);
+    // matchloader.move_absolute(0, 100);
+
+    // //Turn left to face the matchload
+    // left_motor_group.move(-100);
+    // pros::delay(730);
+    // left_motor_group.move(0);
+
+    // //Get the matchload
+    // drive_for_inches(80, 8.8);
+    // intake.move_velocity(-200);
+    // discore.move_absolute(-650, 200);
+    // pros::delay(7000);
+    // intake.move_velocity(0);
+
+    // //Score to long goal
+    // drive_backward_for_inches(60, 13);
+    // pros::delay(1000);
+
+    // fire_catapult_safe(2);
+    // discore.move_velocity(0);
+    // pros::delay(1000);
+    // catapult_arm.move_absolute(0, 400);
 }
