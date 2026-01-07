@@ -32,14 +32,19 @@ void AS5600::update() {
     int current_raw = sensor.get_value();
     int delta = current_raw - last_raw;
 
+    // Handle the 0-4096 wrap
     if (delta > 2048) delta -= 4096;
     else if (delta < -2048) delta += 4096;
 
-    if (std::abs(delta) > 10) { // Increased deadband for analog noise
-        // IF THE ROBOT MOVES BACKWARD, CHANGE += TO -= BELOW
-        total_ticks -= delta; 
-        last_raw = current_raw;
-    }
+    // REMOVED the "if (abs(delta) > 10)" check. 
+    // We need to count EVERY tick, or the PID will stutter at low speeds.
+    
+    // DIRECTION CHECK:
+    // Push the robot FORWARD with your hand. 
+    // If 'total_ticks' goes NEGATIVE, change "+=" to "-=" below.
+    total_ticks += delta; 
+    
+    last_raw = current_raw;
 }
 
 double AS5600::get_inches(double diameter) {
@@ -102,39 +107,47 @@ void odom_task_fn() {
     }
 }
 
-void drawPIDGraph(double error, int timeStep, bool isTurning) {
-    int centerLine = 120; // Middle of the 240px screen
-    int yPos;
+void drawPIDGraph(double error, int timeStep, bool isTurn) {
+    // Screen is 480x240. Center Y is 120.
+    int centerY = 120;
     
-    // SCALE CHECK: 
-    // If error is 24 inches, 24 * 4 = 96. 120 - 96 = 24 (Visible).
-    // If error is 50 inches, 50 * 4 = 200. 120 - 200 = -80 (INVISIBLE!).
-    if (isTurning) {
-        yPos = centerLine - (int)(error * (180.0 / M_PI) * 1.0); // 1px per degree
+    // SCALING (Zoom level)
+    // For Drive: 1 inch error = 40 pixels (High Zoom)
+    // For Turn:  1 degree error = 3 pixels
+    double scale = isTurn ? 3.0 : 40.0;
+    
+    // If turning, convert radians to degrees first
+    double value = isTurn ? (error * 180.0 / M_PI) : error;
+
+    // Calculate Y position (Invert because screen Y=0 is top)
+    int y = centerY - (int)(value * scale);
+
+    // CLAMP values to keep them on screen
+    if (y < 0) y = 0;
+    if (y > 239) y = 239;
+
+    // Wrap X axis (Time) so it loops continuously
+    int x = timeStep % 480;
+
+    // Clear the "sweep bar" (erase upcoming pixels to make it readable)
+    if (x == 0) {
+        pros::screen::set_pen(0x000000); // Black
+        pros::screen::erase();           // Clear screen on loop
+        
+        // Draw the Target Line (Center)
+        pros::screen::set_pen(0x444444); // Dark Gray
+        pros::screen::draw_line(0, centerY, 480, centerY);
+    }
+    
+    // Draw the Error Point
+    // Green = Close enough, Red = Far away
+    if (std::abs(value) < (isTurn ? 1.0 : 0.5)) {
+        pros::screen::set_pen(0x00FF00); // Green (Good!)
     } else {
-        yPos = centerLine - (int)(error * 4.0); // 4px per inch
-    }
-
-    // CLAMPING: Ensures the pixel is ALWAYS on the screen
-    if (yPos < 2) yPos = 2;
-    if (yPos > 237) yPos = 237;
-
-    int xPos = (timeStep % 480); // Wrap around the 480px width
-
-    // Only erase the screen when we wrap back to the start (xPos 0)
-    if (xPos == 0) {
-        pros::screen::erase();
-        // Redraw the center target line after erasing
-        pros::screen::set_pen(0xFFFFFF); // White
-        pros::screen::draw_line(0, centerLine, 480, centerLine);
+        pros::screen::set_pen(0xFF0000); // Red (Bad)
     }
     
-    // Draw the Error Pixel
-    pros::screen::set_pen(0x00FF00); // Bright Green
-    pros::screen::draw_pixel(xPos, yPos);
-    
-    // Draw a small vertical bar instead of a single pixel to make it easier to see
-    pros::screen::draw_line(xPos, yPos - 1, xPos, yPos + 1);
+    pros::screen::draw_pixel(x, y);
 }
 
 void setPose(double newX, double newY, double newTheta) {
@@ -164,33 +177,54 @@ double get_smooth_error(double target, double start) {
     return sum / 5.0;
 }
 
-// --- PID MOVEMENT ---
 void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
-    const double kP = 3.5;      // MUCH LOWER to stop vibration
-    const double kD = 5.0;      // Higher to "dampen" the noise
-    const double kMin = 18.0;   
-    
-    double error = 0, prevError = 0;
-    uint32_t startTime = pros::millis();
-    double startForward = forward_odom.get_inches(2.75);
-    int timeStep = 0;
+    // --- PID CONSTANTS ---
+    double kP = 8.0;      
+    double kI = 0.1;      
+    double kD = 7.5;      
+    double startI = 3.0;  
 
-    // Draw the initial center line
-    pros::screen::set_pen(0xFFFFFF);
-    pros::screen::draw_line(0, 120, 480, 120);
+    double error = 0;
+    double prevError = 0;
+    double integral = 0;
+    double derivative = 0;
+
+    int timeStep = 0;
+    
+    // 1. CAPTURE STARTING GLOBAL POSITION
+    // These come from your odom_task_fn running in the background
+    double startX = robot_x;
+    double startY = robot_y;
+
+    uint32_t startTime = pros::millis();
 
     while (pros::millis() - startTime < timeout) {
-        // Use the smoothed error to stop the "back and forth"
-        error = get_smooth_error(targetDistance, startForward);
+        
+        // 2. CALCULATE DISTANCE TRAVELED (Hypotenuse)
+        // This effectively uses ALL THREE encoders because robot_x/y 
+        // are calculated using forward, heading, and sideways sensors.
+        double distTraveled = std::hypot(robot_x - startX, robot_y - startY);
+        
+        // 3. DIRECTION CHECK (Dot Product approximation)
+        // std::hypot always gives a positive number. 
+        // If we are driving backwards (negative target), we need to make distance negative.
+        // Simple check: relative angle to target. 
+        // For simple DriveForward, we can just rely on the sign of targetDistance.
+        if (targetDistance < 0) {
+            distTraveled = -distTraveled;
+        }
 
-        if (std::abs(error) < 0.6) break; 
+        // 4. Calculate Error
+        error = targetDistance - distTraveled;
 
-        double derivative = error - prevError;
-        double power = (error * kP) + (derivative * kD);
+        // --- PID LOGIC (Same as before) ---
+        if (std::abs(error) < startI) integral += error;
+        else integral = 0;
+        
+        if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
 
-        // Anti-Vibration: If power is tiny, just stop
-        if (std::abs(power) < 6.0) power = 0;
-        else if (std::abs(power) < kMin) power = (error > 0) ? kMin : -kMin;
+        derivative = error - prevError;
+        double power = (error * kP) + (integral * kI) + (derivative * kD);
 
         if (power > maxSpeed) power = maxSpeed;
         if (power < -maxSpeed) power = -maxSpeed;
@@ -198,44 +232,95 @@ void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
         left_motor_group.move_velocity(power);
         right_motor_group.move_velocity(power);
 
-        drawPIDGraph(error, timeStep++, false);
-        
+        if (std::abs(error) < 0.5 && std::abs(derivative) < 0.1) break;
+
+        drawPIDGraph(error, timeStep, false); // false = Driving (Inches)
+        timeStep++;
+
         prevError = error;
         pros::delay(20);
     }
+    
     left_motor_group.move_velocity(0); 
     right_motor_group.move_velocity(0);
 }
 
 void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
-    double kP = 40.0, kI = 0.0, kD = 5.0, startI = 10.0 * (M_PI/180.0);
-    double error = 0, prevError = 0, integral = 0;
-    uint32_t startTime = pros::millis();
-    double targetRad = targetAngleDeg * (M_PI/180.0);
+    // --- TUNING (Different from Drive!) ---
+    // Turns usually need higher kP because friction opposes turning more than driving.
+    double kP = 4.0;      
+    double kI = 0.05;     
+    double kD = 8.5;      
+    double startI = 15.0; // Start integrating when within 15 degrees
+
+    double error = 0;
+    double prevError = 0;
+    double integral = 0;
+    double derivative = 0;
+
     int timeStep = 0;
+    
+    // Convert target to Radians because robot_theta is in Radians
+    double targetRad = targetAngleDeg * (M_PI / 180.0);
+
+    uint32_t startTime = pros::millis();
 
     while (pros::millis() - startTime < timeout) {
+        
+        // 1. CALCULATE ERROR
         error = targetRad - robot_theta;
+
+        // 2. SHORTEST PATH LOGIC (Angle Wrapping)
+        // This ensures the robot takes the shortest turn. 
+        // Example: If at 350° and target is 10°, error becomes +20°, not -340°.
         while (error > M_PI) error -= 2 * M_PI;
         while (error < -M_PI) error += 2 * M_PI;
-        if (std::abs(error) < (1.0 * M_PI/180.0)) break;
 
-        if (std::abs(error) < startI) integral += error; else integral = 0;
-        double derivative = error - prevError;
+        // 3. Integral Logic
+        if (std::abs(error) < (startI * M_PI / 180.0)) {
+            integral += error;
+        } else {
+            integral = 0;
+        }
+        // Reset integral if we cross the target
+        if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
+
+        // 4. Derivative
+        derivative = error - prevError;
+
+        // 5. Calculate Power
         double power = (error * kP) + (integral * kI) + (derivative * kD);
+        
+        // (Optional) Boost power if error is small but robot is stuck
+        // This helps overcome static friction (stiction) at the very end
+        if (std::abs(error) > (1.0 * M_PI/180.0) && std::abs(power) < 15.0) {
+            power = (power > 0) ? 15.0 : -15.0;
+        }
 
+        // 6. Cap Power
         if (power > maxSpeed) power = maxSpeed;
         if (power < -maxSpeed) power = -maxSpeed;
 
-        left_motor_group.move_velocity(power);
+        // 7. Move Motors (Turn in Place)
+        // Left goes forward, Right goes backward (or vice versa)
+        left_motor_group.move_velocity(power);   
         right_motor_group.move_velocity(-power);
 
-        drawPIDGraph(error, timeStep, true);
+        // 8. Exit Condition
+        // Exit if error is less than 1 degree AND velocity is near zero
+        if (std::abs(error) < (1.0 * M_PI / 180.0) && std::abs(derivative) < 0.05) {
+            break;
+        }
+
+        drawPIDGraph(error, timeStep, true); // true = Turning (Degrees)
         timeStep++;
+
         prevError = error;
         pros::delay(20);
     }
-    left_motor_group.move_velocity(0); right_motor_group.move_velocity(0);
+    
+    left_motor_group.move_velocity(0); 
+    right_motor_group.move_velocity(0);
 }
 
 
