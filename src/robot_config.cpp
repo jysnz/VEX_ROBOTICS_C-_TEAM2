@@ -32,8 +32,8 @@ lemlib::Drivetrain drivetrain(&left_motor_group, &right_motor_group, 14.5, lemli
 
 // Wrapper functions for LemLib
 float get_left_v_dist()  { return update_encoder('C', dist_left_v, last_left_v); }
-float get_right_v_dist() { return update_encoder('D', dist_right_v, last_right_v); }
-float get_horiz_x_dist() { return update_encoder('E', dist_horiz_x, last_horiz_x); }
+float get_right_v_dist() { return update_encoder('B', dist_right_v, last_right_v); }
+float get_horiz_x_dist() { return update_encoder('A', dist_horiz_x, last_horiz_x); }
 
 // --- LemLib Initialization ---
 // Vertical wheels track Y and Heading. Horizontal tracks X.
