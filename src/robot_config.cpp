@@ -37,9 +37,9 @@ float get_horiz_x_dist() { return update_encoder('E', dist_horiz_x, last_horiz_x
 
 // --- LemLib Initialization ---
 // Vertical wheels track Y and Heading. Horizontal tracks X.
-lemlib::TrackingWheel vert_left(get_left_v_dist, 2.75, -4.600); 
-lemlib::TrackingWheel vert_right(get_right_v_dist, 2.75, 1.700);
-lemlib::TrackingWheel horizontal(get_horiz_x_dist, 2.75, -4.500);
+lemlib::TrackingWheel vert_left(get_left_v_dist, 2, -4.600); 
+lemlib::TrackingWheel vert_right(get_right_v_dist, 2, 1.700);
+lemlib::TrackingWheel horizontal(get_horiz_x_dist, 2, -4.500);
 
 // lemlib::TrackingWheel horizontal_tracking_wheel(&horizontal_encoder, lemlib::Omniwheel::NEW_325, -5.75);
 // lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder, lemlib::Omniwheel::NEW_325, -2.5);
