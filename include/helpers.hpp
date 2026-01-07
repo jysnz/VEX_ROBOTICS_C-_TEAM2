@@ -24,4 +24,7 @@ void spit_ball(double milliseconds, double velocity);
 void get_matchload(double milliseconds, double velocity, bool twoVtwoV2=false);
 void score_long_goal(double angle, double velocity);
 void detect_wall_to_score(double targetInches);
+void drive_for_inches(double maxSpeed, double inches);
+void drive_backward_for_inches(double maxSpeed, double inches);
+void fire_catapult_safe(double targetInches);
 

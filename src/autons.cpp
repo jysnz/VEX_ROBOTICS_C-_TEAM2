@@ -1,8 +1,9 @@
+#include "odometry.hpp"
 #include "robot_config.hpp"
 #include "helpers.hpp"
 
 void AS5600_autonSkills(){
-
+    driveForwardPID(12, 2000);
 }
 
 void hardCoded2v2Auton(){

@@ -395,3 +395,152 @@ void detect_wall_to_score(double targetInches) {
 
     pros::delay(20); // Small delay to prevent CPU hogging
 }
+
+void fire_catapult_safe(double targetInches) {
+    // 1. Get the current distance
+    double currentDist = ultrasonic.get_value() / 25.4;
+
+    // 2. PRINT TO LAPTOP TERMINAL
+    // \n is a "newline" so each reading starts on a new line
+    // \r is a "carriage return" to prevent messy indenting
+    printf("Distance: %.2f in | Target: %.1f in | Status: ", currentDist, targetInches);
+
+    // 3. Logic and Status Printing
+    if (currentDist > 1.0 && currentDist < targetInches) {
+        printf("FIRING\n"); // Laptop output
+        pros::lcd::print(5, "STATE: FIRING"); // Brain output
+        
+        catapult_arm.move_absolute(-600, 400);
+        discore.move_velocity(0); 
+    } 
+    else if (currentDist <= 1.0 && currentDist > 0) {
+        printf("BLINDED (Too Close)\n");
+        pros::lcd::print(5, "STATE: BLINDED");
+        catapult_arm.move_absolute(0, 400);
+    }
+    else {
+        printf("EMPTY/FAR\n");
+        pros::lcd::print(5, "STATE: EMPTY");
+        catapult_arm.move_absolute(0, 400);
+    }
+}
+
+void drive_for_inches(double maxSpeed, double inches) {
+    double targetDegrees = inchesToDegrees(inches);
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    const double accelRate = 2.0;
+    const double decelStart = 0.6;
+
+    double currentSpeed = 0;
+    double decelPoint = targetDegrees * decelStart;
+
+    while (true) {
+        double leftPos  = std::abs(left_motor_group.get_position());
+        double rightPos = std::abs(right_motor_group.get_position());
+        double avgPos   = (leftPos + rightPos) / 2.0;
+
+        // ACCELERATION
+        if (avgPos < decelPoint) {
+            currentSpeed += accelRate;
+            if (currentSpeed > maxSpeed)
+                currentSpeed = maxSpeed;
+        }
+        // DECELERATION
+        else {
+            double remaining = targetDegrees - avgPos;
+            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
+            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
+        }
+
+        // END CONDITION
+        if (avgPos >= targetDegrees - 2) break;
+
+        left_motor_group.move_velocity(currentSpeed);
+        right_motor_group.move_velocity(currentSpeed);
+
+        pros::delay(10);
+    }
+
+    // ----- SMOOTH FINAL STOP -----
+    double lastSpeed = std::max(currentSpeed, 10.0); // start ramp-down from current speed
+    while (lastSpeed > 0) {
+        left_motor_group.move_velocity(lastSpeed);
+        right_motor_group.move_velocity(lastSpeed);
+        lastSpeed -= 2;           // small decrement for smooth stop
+        if (lastSpeed < 0) lastSpeed = 0;
+        pros::delay(10);
+    }
+
+    // Hard stop
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+}
+
+
+void drive_backward_for_inches(double maxSpeed, double inches) {
+    // targetDegrees is the magnitude of the rotation needed (always positive)
+    double targetDegrees = inchesToDegrees(inches);
+
+    left_motor_group.tare_position();
+    right_motor_group.tare_position();
+
+    // Constant parameters
+    const double accelRate = 2.0;
+    const double decelStart = 0.6; // Start decelerating at 60% of the distance
+
+    double currentSpeed = 0;
+    double decelPoint = targetDegrees * decelStart;
+    
+    // We will use a negative speed command to move backward
+    double backwardSpeedCommand = 0.0;
+
+    while (true) {
+        // Use the absolute value for position tracking, as in the original function.
+        // This keeps the acceleration/deceleration logic simple and positive-based.
+        double leftPos  = std::abs(left_motor_group.get_position());
+        double rightPos = std::abs(right_motor_group.get_position());
+        double avgPos   = (leftPos + rightPos) / 2.0;
+
+        // ACCELERATION (same logic as forward)
+        if (avgPos < decelPoint) {
+            currentSpeed += accelRate;
+            if (currentSpeed > maxSpeed)
+                currentSpeed = maxSpeed;
+        }
+        // DECELERATION (same logic as forward)
+        else {
+            double remaining = targetDegrees - avgPos;
+            currentSpeed = maxSpeed * (remaining / (targetDegrees - decelPoint));
+            if (currentSpeed < 10) currentSpeed = 10; // lower min for smooth stop
+        }
+
+        // Set the final speed command to be negative for backward movement
+        backwardSpeedCommand = -currentSpeed;
+
+        // END CONDITION
+        if (avgPos >= targetDegrees - 2) break; // Stop a little early
+
+        left_motor_group.move_velocity(backwardSpeedCommand);
+        right_motor_group.move_velocity(backwardSpeedCommand);
+
+        pros::delay(10);
+    }
+
+    // ----- SMOOTH FINAL STOP (Ramp down to 0) -----
+    // We ramp down the NEGATIVE speed towards 0
+    double lastSpeedCommand = std::min(backwardSpeedCommand, -10.0); // start ramp-down from current speed
+    while (lastSpeedCommand < 0) { // loop while the command is negative
+        left_motor_group.move_velocity(lastSpeedCommand);
+        right_motor_group.move_velocity(lastSpeedCommand);
+        lastSpeedCommand += 2;      // small POSITIVE increment to approach 0
+        if (lastSpeedCommand > 0) lastSpeedCommand = 0;
+        pros::delay(10);
+    }
+
+    // Hard stop
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+}
