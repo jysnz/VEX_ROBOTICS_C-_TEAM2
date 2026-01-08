@@ -150,15 +150,6 @@ void debug_task_fn(void* ignore) {
     }
 }
 
-// ==========================================
-//          NEW STEP RESPONSE GRAPH
-// ==========================================
-// Draw the Red Target line and Green Actual line
-
-// ==========================================
-//          PID: DRIVE FORWARD
-// ==========================================
-// Draw the Red Target line and Green Actual line
 void drawTargetGraph(double target, double current, double scale) {
     // Static variables to connect lines from previous frame
     static double prevTarget = 0;
@@ -250,7 +241,7 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
 
         // Min Power Boost for Reverse
         if (std::abs(masterPower) < 10 && std::abs(error) > 1.0) { 
-             masterPower = (masterPower > 0) ? 10 : -10;
+            masterPower = (masterPower > 0) ? 10 : -10;
         }
 
         // Cap speed
@@ -261,8 +252,7 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
         double headingError = targetTheta - robot_theta;
         while (headingError > M_PI) headingError -= 2 * M_PI;
         while (headingError < -M_PI) headingError += 2 * M_PI;
-        
-        double currentHeadingKP = (std::abs(error) < 2.0) ? 2.0 : kP_Heading;
+        double currentHeadingKP = kP_Heading;   
         double turnCorrection = headingError * currentHeadingKP;
 
         // --- CRITICAL REVERSE LOGIC ---
@@ -280,8 +270,8 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
         pros::delay(20);
     }
     
-    left_motor_group.brake();
-    right_motor_group.brake();
+    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }
 
 // ==========================================
@@ -292,9 +282,9 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
 //KI = 0.0
 //KD = 0.79
 void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
-    double kP = 4.3; 
+    double kP = 4.0; 
     double kI = 0.0; 
-    double kD = 0.85; 
+    double kD = 0.91; 
     double kP_Heading = 10.0; 
     double startI = 3.0; 
 
@@ -355,7 +345,8 @@ void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
         right_motor_group.move_velocity(masterPower - turnCorrection);
 
         // 4. Exit Conditions
-        if (std::abs(error) < 0.5) break; // Simplified exit for readability
+        // Wait until error is small AND speed (derivative) is near zero
+        if (std::abs(error) < 0.5 && std::abs(derivative) < 0.1) break;
 
         prevError = error;
         pros::delay(20);
@@ -363,8 +354,8 @@ void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
     
     left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
-    left_motor_group.brake();
-    right_motor_group.brake();
+    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }
 
 // ==========================================
@@ -420,6 +411,6 @@ void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
         prevError = error;
         pros::delay(20);
     }
-    left_motor_group.brake();
-    right_motor_group.brake();
+     left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }

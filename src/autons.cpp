@@ -4,9 +4,9 @@
 #include "helpers.hpp"
 
 void AS5600_autonSkills(){
-    driveForwardPID(12, 100, 3000);
+    driveForwardPID(12, 100, 1000);
     pros::delay(500);
-    driveForwardPID(24, 100, 3000);
+    driveForwardPID(24, 100, 1000);
 
     // driveForwardPID(18, 100, 3000);
     // pros::delay(500);
