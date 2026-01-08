@@ -4,7 +4,13 @@
 #include "helpers.hpp"
 
 void AS5600_autonSkills(){
-    driveForwardPID(24, 60, 3000);
+    driveForwardPID(12, 100, 3000);
+    pros::delay(500);
+    driveForwardPID(24, 100, 3000);
+
+    // driveForwardPID(18, 100, 3000);
+    // pros::delay(500);
+    // driveReversePID(18, 50, 4000);
 }
 
 void hardCoded2v2Auton(){
