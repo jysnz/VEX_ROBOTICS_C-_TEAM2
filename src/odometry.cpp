@@ -2,328 +2,337 @@
 #include <cmath>
 #include "robot_config.hpp"
 
-// Global Definitions
+// ==========================================
+//          CONFIGURATION
+// ==========================================
+const double WHEEL_DIAMETER = 3.25;
+const double FORWARD_OFFSET = -0.66; // Left Vertical Wheel
+const double HEADING_OFFSET = 1.64;  // Right Vertical Wheel
+const double SIDEWAYS_OFFSET = 6.55; // Horizontal Wheel
+
+// TUNE THIS MANUALLY using the "Spin Test"
+double TRACK_WIDTH = 14.75; //std::abs(FORWARD_OFFSET - HEADING_OFFSET);
+
+// ==========================================
+//          GLOBAL VARIABLES
+// ==========================================
 double robot_x = 0;
 double robot_y = 0;
-double robot_theta = 0;
+double robot_theta = 0; // In Radians
 
-int forward_odom_raw = 0;
-int heading_odom_raw = 0;
-int sideways_odom_raw = 0;
+// ==========================================
+//          AS5600 IMPLEMENTATION
+// ==========================================
 
-// Initialize Sensors
-AS5600 forward_odom('A');
-AS5600 heading_odom('B');
-AS5600 sideways_odom('C');
+// 1. Constructor: NO DELAYS HERE. Only simple variable setup.
+AS5600::AS5600(char port, bool is_reversed) : sensor(port), reversed(is_reversed) {
+    last_raw = 0;
+    total_ticks = 0;
+    filtered_val = 0;
+}
 
-// --- PHYSICAL CONSTANTS (ADJUST THESE) ---
-const double WHEEL_DIAMETER = 3.2; 
-const double FORWARD_OFFSET = -0.66;  // Dist from center to forward wheel (inches)
-const double HEADING_OFFSET = 1.64; // Dist from center to heading wheel (inches)
-const double SIDEWAYS_OFFSET = 6.55; // Dist from center to sideways wheel (inches)
-const double TRACK_WIDTH = FORWARD_OFFSET - HEADING_OFFSET; //
-
-// --- AS5600 CLASS METHODS ---
-AS5600::AS5600(char port) : sensor(port) {
+// 2. Calibrate: Call this in initialize() to safely stabilize sensors
+void AS5600::calibrate() {
     last_raw = sensor.get_value();
-}
-
-void AS5600::update() {
-    int current_raw = sensor.get_value();
-    int delta = current_raw - last_raw;
-
-    // Handle the 0-4096 wrap
-    if (delta > 2048) delta -= 4096;
-    else if (delta < -2048) delta += 4096;
-
-    // REMOVED the "if (abs(delta) > 10)" check. 
-    // We need to count EVERY tick, or the PID will stutter at low speeds.
-    
-    // DIRECTION CHECK:
-    // Push the robot FORWARD with your hand. 
-    // If 'total_ticks' goes NEGATIVE, change "+=" to "-=" below.
-    total_ticks += delta; 
-    
-    last_raw = current_raw;
-}
-
-double AS5600::get_inches(double diameter) {
-    return (total_ticks / 4096.0) * (diameter * M_PI); //
+    pros::delay(20); // Safe to delay here because OS is running
+    last_raw = sensor.get_value();
+    reset();
 }
 
 int AS5600::get_raw() {
     return sensor.get_value();
 }
 
+void AS5600::update() {
+    int current_raw = sensor.get_value();
+    
+    // Calculate the change
+    int delta = current_raw - last_raw;
+
+    // --- 1. DEADBAND (Fixes Ghost Movement) ---
+    // If the change is tiny (noise), ignore it completely.
+    if (std::abs(delta) < 5) { 
+        // Do NOT update last_raw, keep waiting for real movement
+        return; 
+    }
+
+    // --- 2. WRAP LOGIC (Fixes Sawtooth) ---
+    // If delta is huge (> 2048), it means we crossed the 0/4095 line.
+    if (delta > 2048) {
+        delta -= 4096; // We wrapped backward
+    } 
+    else if (delta < -2048) {
+        delta += 4096; // We wrapped forward
+    }
+
+    // --- 3. ACCUMULATE ---
+    if (reversed) {
+        total_ticks -= delta;
+    } else {
+        total_ticks += delta;
+    }
+
+    // Only update this if we actually accepted the movement
+    last_raw = current_raw;
+}
+
+// 4. Get Inches (with filter)
+double AS5600::get_inches() {
+    double raw_inches = (total_ticks / 4096.0) * (WHEEL_DIAMETER * M_PI);
+    // Low Pass Filter
+    filtered_val = (alpha * raw_inches) + ((1.0 - alpha) * filtered_val);
+    return filtered_val;
+}
+
+// 5. Reset
 void AS5600::reset() {
     total_ticks = 0;
+    filtered_val = 0;
     last_raw = sensor.get_value();
 }
 
-// --- ODOMETRY TASK ---
-void odom_task_fn() {
+// ==========================================
+//          SENSOR OBJECTS
+// ==========================================   
+// PUSH TEST: Push forward. If L/R goes negative, change false->true.
+AS5600 forward_odom('C', true); 
+AS5600 heading_odom('B', false);  
+AS5600 sideways_odom('A', true);
+
+// ==========================================
+//          ODOMETRY BACKGROUND TASK
+// ==========================================
+void odom_task_fn(void* ignore) {
     double prev_F = 0, prev_H = 0, prev_S = 0;
 
     while (true) {
-        // Update raw values for debugging
-        forward_odom_raw = forward_odom.get_raw();
-        heading_odom_raw = heading_odom.get_raw();
-        sideways_odom_raw = sideways_odom.get_raw();
-
-        // Update tracking logic
+        // Update Sensors
         forward_odom.update();
         heading_odom.update();
         sideways_odom.update();
 
-        double cur_F = forward_odom.get_inches(WHEEL_DIAMETER);
-        double cur_H = heading_odom.get_inches(WHEEL_DIAMETER);
-        double cur_S = sideways_odom.get_inches(WHEEL_DIAMETER);
+        // Get current values
+        double cur_F = forward_odom.get_inches();
+        double cur_H = heading_odom.get_inches();
+        double cur_S = sideways_odom.get_inches();
 
+        // Calculate Deltas
         double dF = cur_F - prev_F;
         double dH = cur_H - prev_H;
         double dS = cur_S - prev_S;
 
-        // Calculate heading change
+        prev_F = cur_F; prev_H = cur_H; prev_S = cur_S;
+
+        // Calculate Heading Change
+        // This relies on both wheels, so they must agree on Track Width
         double delta_theta = (dF - dH) / TRACK_WIDTH;
 
+        // --- THE FIX FOR "FIGHTING" WHEELS ---
+        // Instead of using just dF, we use the average of dF and dH.
+        // This represents the physical center of the robot.
+        double center_dist = (dF + dH) / 2.0; 
+
+        // Calculate Local Position
         double local_x, local_y;
+
         if (delta_theta == 0) {
-            local_y = dF;
+            local_y = center_dist; 
             local_x = dS;
         } else {
-            // Arc-based translation
-            local_y = 2 * std::sin(delta_theta / 2.0) * ((dF / delta_theta) + FORWARD_OFFSET);
+            // ARC CALCULATION
+            // We use center_dist directly. No FORWARD_OFFSET needed here 
+            // because center_dist is ALREADY at the center!
+            local_y = 2 * std::sin(delta_theta / 2.0) * (center_dist / delta_theta);
+
+            // Sideways still needs the offset because the back wheel isn't at the center
             local_x = 2 * std::sin(delta_theta / 2.0) * ((dS / delta_theta) + SIDEWAYS_OFFSET);
         }
+        // -------------------------------------
 
-        // Global transformation
+        // Rotate to Global
         double avg_theta = robot_theta + (delta_theta / 2.0);
         robot_x += local_y * std::sin(avg_theta) + local_x * std::cos(avg_theta);
         robot_y += local_y * std::cos(avg_theta) - local_x * std::sin(avg_theta);
         robot_theta += delta_theta;
 
-        prev_F = cur_F; prev_H = cur_H; prev_S = cur_S;
-        pros::delay(10);
+        pros::delay(10); 
     }
 }
 
+// ==========================================
+//          DEBUG DASHBOARD
+// ==========================================
+void debug_task_fn(void* ignore) {
+    while (true) {
+        // Line 0: Global Position
+        pros::lcd::print(0, "X: %.2f  Y: %.2f  Ang: %.1f", 
+            robot_x, robot_y, robot_theta * 180 / M_PI);
+        
+        // Line 1: RAW TICKS for Left(C), Right(B), Sideways(A)
+        // Now you can see if B is actually counting!
+        pros::lcd::print(1, "L:%d  R:%d  S:%d", 
+            forward_odom.get_raw(), 
+            heading_odom.get_raw(), 
+            sideways_odom.get_raw()
+        );
+        
+        // Line 2: INCHES for Left, Right, Sideways
+        pros::lcd::print(2, "L:%.1f  R:%.1f  S:%.1f", 
+            forward_odom.get_inches(), 
+            heading_odom.get_inches(), 
+            sideways_odom.get_inches()
+        );
+
+        pros::delay(50);
+    }
+}
+
+// ==========================================
+//          DEBUG GRAPH
+// ==========================================
 void drawPIDGraph(double error, int timeStep, bool isTurn) {
-    // Screen is 480x240. Center Y is 120.
     int centerY = 120;
-    
-    // SCALING (Zoom level)
-    // For Drive: 1 inch error = 40 pixels (High Zoom)
-    // For Turn:  1 degree error = 3 pixels
-    double scale = isTurn ? 3.0 : 40.0;
-    
-    // If turning, convert radians to degrees first
+    double scale = isTurn ? 3.0 : 40.0; 
     double value = isTurn ? (error * 180.0 / M_PI) : error;
 
-    // Calculate Y position (Invert because screen Y=0 is top)
     int y = centerY - (int)(value * scale);
-
-    // CLAMP values to keep them on screen
-    if (y < 0) y = 0;
-    if (y > 239) y = 239;
-
-    // Wrap X axis (Time) so it loops continuously
+    if (y < 0) y = 0; if (y > 239) y = 239;
     int x = timeStep % 480;
 
-    // Clear the "sweep bar" (erase upcoming pixels to make it readable)
-    if (x == 0) {
-        pros::screen::set_pen(0x000000); // Black
-        pros::screen::erase();           // Clear screen on loop
-        
-        // Draw the Target Line (Center)
-        pros::screen::set_pen(0x444444); // Dark Gray
-        pros::screen::draw_line(0, centerY, 480, centerY);
+    if (x == 0) { 
+        pros::screen::erase(); 
+        pros::screen::set_pen(0x444444); 
+        pros::screen::draw_line(0, centerY, 480, centerY); 
     }
     
-    // Draw the Error Point
-    // Green = Close enough, Red = Far away
-    if (std::abs(value) < (isTurn ? 1.0 : 0.5)) {
-        pros::screen::set_pen(0x00FF00); // Green (Good!)
-    } else {
-        pros::screen::set_pen(0xFF0000); // Red (Bad)
-    }
-    
+    pros::screen::set_pen(std::abs(value) < (isTurn ? 1.0 : 0.5) ? 0x00FF00 : 0xFF0000);
     pros::screen::draw_pixel(x, y);
 }
 
-void setPose(double newX, double newY, double newTheta) {
-    // Stop the task briefly or use a mutex to prevent race conditions
-    robot_x = newX;
-    robot_y = newY;
-    robot_theta = newTheta;
-    
-    // Reset the internal sensor counts to match the new starting point
-    forward_odom.reset();
-    heading_odom.reset();
-    sideways_odom.reset();
-}
-
-// Inside driveForwardPID
-double get_smooth_error(double target, double start) {
-    static double history[5] = {0,0,0,0,0};
-    double current = target - (forward_odom.get_inches(2.75) - start);
-    
-    // Shift history
-    for(int i=4; i>0; i--) history[i] = history[i-1];
-    history[0] = current;
-
-    // Average the last 5 readings
-    double sum = 0;
-    for(int i=0; i<5; i++) sum += history[i];
-    return sum / 5.0;
-}
-
+// ==========================================
+//          PID: DRIVE FORWARD
+// ==========================================
+// ==========================================
+//          PID: DRIVE FORWARD (WITH GRAPH)
+// ==========================================
 void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
-    // --- PID CONSTANTS ---
-    double kP = 8.0;      
-    double kI = 0.1;      
-    double kD = 7.5;      
-    double startI = 3.0;  
+    // 1. PID Constants
+    double kP = 8.0; 
+    double kI = 0.0; // Keep 0.0 unless you really need it
+    double kD = 15;
+    double kP_Heading = 10.0; 
+    double startI = 3.0; 
 
-    double error = 0;
-    double prevError = 0;
-    double integral = 0;
-    double derivative = 0;
-
-    int timeStep = 0;
-    
-    // 1. CAPTURE STARTING GLOBAL POSITION
-    // These come from your odom_task_fn running in the background
-    double startX = robot_x;
+    // 2. Variables
+    double error = 0, prevError = 0, integral = 0, derivative = 0;
+    double startX = robot_x; 
     double startY = robot_y;
+    double targetTheta = robot_theta; 
+    
+    int settleTimer = 0; 
+    int timeStep = 0; // <--- NEEDED FOR GRAPHING
 
     uint32_t startTime = pros::millis();
 
+    // 3. The Loop
     while (pros::millis() - startTime < timeout) {
-        
-        // 2. CALCULATE DISTANCE TRAVELED (Hypotenuse)
-        // This effectively uses ALL THREE encoders because robot_x/y 
-        // are calculated using forward, heading, and sideways sensors.
+        // --- Calculate Distance Error ---
         double distTraveled = std::hypot(robot_x - startX, robot_y - startY);
-        
-        // 3. DIRECTION CHECK (Dot Product approximation)
-        // std::hypot always gives a positive number. 
-        // If we are driving backwards (negative target), we need to make distance negative.
-        // Simple check: relative angle to target. 
-        // For simple DriveForward, we can just rely on the sign of targetDistance.
-        if (targetDistance < 0) {
-            distTraveled = -distTraveled;
-        }
-
-        // 4. Calculate Error
+        if (targetDistance < 0) distTraveled = -distTraveled;
         error = targetDistance - distTraveled;
 
-        // --- PID LOGIC (Same as before) ---
-        if (std::abs(error) < startI) integral += error;
-        else integral = 0;
+        // --- Calculate Heading Error ---
+        double headingError = targetTheta - robot_theta;
+        while (headingError > M_PI) headingError -= 2 * M_PI;
+        while (headingError < -M_PI) headingError += 2 * M_PI;
         
+        // Relax heading correction when close to target to stop "Twisting"
+        double currentHeadingKP = (std::abs(error) < 2.0) ? 2.0 : kP_Heading;
+        double turnCorrection = headingError * currentHeadingKP;
+
+        // --- PID Calculations ---
+        if (std::abs(error) < startI) integral += error; else integral = 0;
         if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
+        
+        // ** ANTI-DRIFT FIX **
+        // If extremely close, kill integral to prevent sliding past target
+        if (std::abs(error) < 0.5) integral = 0;
 
         derivative = error - prevError;
-        double power = (error * kP) + (integral * kI) + (derivative * kD);
 
+        double masterPower = (error * kP) + (integral * kI) + (derivative * kD);
+
+        // --- Power Management ---
+        // Minimum power boost (Removed when very close to target)
+        if (std::abs(masterPower) < 10 && std::abs(error) > 1.0) { 
+             masterPower = (masterPower > 0) ? 10 : -10;
+        }
+
+        // Cap speed
+        if (masterPower > maxSpeed) masterPower = maxSpeed;
+        if (masterPower < -maxSpeed) masterPower = -maxSpeed;
+        
+        // Move Motors
+        left_motor_group.move_velocity(masterPower + turnCorrection);
+        right_motor_group.move_velocity(masterPower - turnCorrection);
+
+        // --- DRAW THE GRAPH ---
+        // 'false' means we are graphing Distance, not Turning
+        drawPIDGraph(error, timeStep++, false); 
+
+        // --- Exit Conditions ---
+        if (std::abs(error) < 0.5) {
+            settleTimer += 20; 
+        } else {
+            settleTimer = 0; 
+        }
+
+        if (settleTimer > 100) break;
+
+        prevError = error;
+        pros::delay(20);
+    }
+    
+    // Stop and Brake
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+    left_motor_group.brake();
+    right_motor_group.brake();
+}
+
+// ==========================================
+//          PID: TURN TO ANGLE
+// ==========================================
+void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
+    double kP = 4.0; double kI = 0.05; double kD = 8.5;
+    double startI = 15.0; 
+    double error = 0, prevError = 0, integral = 0, derivative = 0;
+    double targetRad = targetAngleDeg * (M_PI / 180.0);
+    int timeStep = 0;
+    uint32_t startTime = pros::millis();
+
+    while (pros::millis() - startTime < timeout) {
+        error = targetRad - robot_theta;
+        while (error > M_PI) error -= 2 * M_PI;
+        while (error < -M_PI) error += 2 * M_PI;
+
+        if (std::abs(error) < (startI * M_PI/180.0)) integral += error; else integral = 0;
+        if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
+        derivative = error - prevError;
+
+        double power = (error * kP) + (integral * kI) + (derivative * kD);
         if (power > maxSpeed) power = maxSpeed;
         if (power < -maxSpeed) power = -maxSpeed;
 
         left_motor_group.move_velocity(power);
-        right_motor_group.move_velocity(power);
-
-        if (std::abs(error) < 0.5 && std::abs(derivative) < 0.1) break;
-
-        drawPIDGraph(error, timeStep, false); // false = Driving (Inches)
-        timeStep++;
-
-        prevError = error;
-        pros::delay(20);
-    }
-    
-    left_motor_group.move_velocity(0); 
-    right_motor_group.move_velocity(0);
-}
-
-void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
-    // --- TUNING (Different from Drive!) ---
-    // Turns usually need higher kP because friction opposes turning more than driving.
-    double kP = 4.0;      
-    double kI = 0.05;     
-    double kD = 8.5;      
-    double startI = 15.0; // Start integrating when within 15 degrees
-
-    double error = 0;
-    double prevError = 0;
-    double integral = 0;
-    double derivative = 0;
-
-    int timeStep = 0;
-    
-    // Convert target to Radians because robot_theta is in Radians
-    double targetRad = targetAngleDeg * (M_PI / 180.0);
-
-    uint32_t startTime = pros::millis();
-
-    while (pros::millis() - startTime < timeout) {
-        
-        // 1. CALCULATE ERROR
-        error = targetRad - robot_theta;
-
-        // 2. SHORTEST PATH LOGIC (Angle Wrapping)
-        // This ensures the robot takes the shortest turn. 
-        // Example: If at 350° and target is 10°, error becomes +20°, not -340°.
-        while (error > M_PI) error -= 2 * M_PI;
-        while (error < -M_PI) error += 2 * M_PI;
-
-        // 3. Integral Logic
-        if (std::abs(error) < (startI * M_PI / 180.0)) {
-            integral += error;
-        } else {
-            integral = 0;
-        }
-        // Reset integral if we cross the target
-        if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
-
-        // 4. Derivative
-        derivative = error - prevError;
-
-        // 5. Calculate Power
-        double power = (error * kP) + (integral * kI) + (derivative * kD);
-        
-        // (Optional) Boost power if error is small but robot is stuck
-        // This helps overcome static friction (stiction) at the very end
-        if (std::abs(error) > (1.0 * M_PI/180.0) && std::abs(power) < 15.0) {
-            power = (power > 0) ? 15.0 : -15.0;
-        }
-
-        // 6. Cap Power
-        if (power > maxSpeed) power = maxSpeed;
-        if (power < -maxSpeed) power = -maxSpeed;
-
-        // 7. Move Motors (Turn in Place)
-        // Left goes forward, Right goes backward (or vice versa)
-        left_motor_group.move_velocity(power);   
         right_motor_group.move_velocity(-power);
 
-        // 8. Exit Condition
-        // Exit if error is less than 1 degree AND velocity is near zero
-        if (std::abs(error) < (1.0 * M_PI / 180.0) && std::abs(derivative) < 0.05) {
-            break;
-        }
-
-        drawPIDGraph(error, timeStep, true); // true = Turning (Degrees)
-        timeStep++;
-
+        drawPIDGraph(error, timeStep++, true);
+        if (std::abs(error) < (1.0 * M_PI/180.0) && std::abs(derivative) < 0.05) break;
         prevError = error;
         pros::delay(20);
     }
-    
-    left_motor_group.move_velocity(0); 
+    left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
 }
 
-
-void start_odom() {
-    pros::Task odom_task(odom_task_fn);
-}

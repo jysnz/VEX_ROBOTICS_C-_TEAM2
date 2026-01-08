@@ -1,10 +1,10 @@
+#include "lemlib/chassis/chassis.hpp"
 #include "odometry.hpp"
 #include "robot_config.hpp"
 #include "helpers.hpp"
 
 void AS5600_autonSkills(){
-    driveForwardPID(24, 100, 3000);
-    pros::delay(500);
+    driveForwardPID(24, 60, 3000);
 }
 
 void hardCoded2v2Auton(){

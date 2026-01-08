@@ -5,3 +5,4 @@ void twoVtwo_autonomous_right();
 void twoVtwo_autonomous_right_v2();
 void hardCoded2v2Auton();
 void park2v2V2();
+void AS5600_autonSkills();

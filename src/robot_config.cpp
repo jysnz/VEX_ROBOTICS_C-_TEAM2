@@ -13,7 +13,7 @@ pros::adi::Ultrasonic ultrasonic('D', 'E');
 
 // --- Drivetrain & Odometry Setup ---
 lemlib::Drivetrain drivetrain(&left_motor_group, &right_motor_group, 14.5,
-                              lemlib::Omniwheel::NEW_325, 400, 2);
+                              lemlib::Omniwheel::NEW_325, 500, 4);
 
 lemlib::OdomSensors sensors(nullptr, nullptr, nullptr, nullptr,
                             nullptr);

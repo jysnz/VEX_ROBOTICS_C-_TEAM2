@@ -1,6 +1,7 @@
 #include "tasks.hpp"
 #include "helpers.hpp"
 #include "liblvgl/display/lv_display.h"
+#include "odometry.hpp"
 
 // Access global variables
 float tune_kp = 10.0, tune_ki = 0.0, tune_kd = 3.0, tune_start_i = 2.0;
@@ -138,3 +139,4 @@ void startTuningUI() {
         }
     });
 }
+

@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "ConquestaSkillsTune",
+    "project_name": "Catapult",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -635,7 +635,7 @@
       }
     },
     "upload_options": {
-      "slot": 4,
+      "slot": 1,
       "after": "none",
       "icon": "robot"
     },
