@@ -3,8 +3,20 @@
 
 #include "main.h"
 
+// ==========================================
+//          PID CONFIG STRUCTURE
+// ==========================================
+struct PIDConfig {
+    double kP;
+    double kI;
+    double kD;
+};
+
+// Global config objects (defined in .cpp)
+extern PIDConfig forwardPID_Consts;
+extern PIDConfig turnPID_Consts;
+
 // --- AS5600 Wrapper Class ---
-// Updated to match the noise-filtered, wrapping-handling implementation
 class AS5600 {
 private:
     pros::adi::AnalogIn sensor;
@@ -14,48 +26,43 @@ private:
 
     // Filter variables
     double filtered_val = 0;
-    const double alpha = 0.7; // Smoothing factor
+    const double alpha = 0.7; 
 
 public:
-    // Constructor now takes the 'reversed' flag
     AS5600(char port, bool is_reversed);
-
     void update();
     void calibrate();
-    
-    // No longer needs diameter passed in (uses global constant in .cpp)
     double get_inches(); 
-    
     void reset();
     int get_raw();
 };
 
 // --- Global Position Variables ---
-// These are updated by the background task
 extern double robot_x;
 extern double robot_y;
 extern double robot_theta; // In Radians
 
 // --- Sensor Objects ---
-// Exposed so you can access them in main.cpp if needed
 extern AS5600 forward_odom;
 extern AS5600 heading_odom;
 extern AS5600 sideways_odom;
 
 // --- Function Prototypes ---
 
-// Background Task Function
+// Background Tasks
 void odom_task_fn(void* ignore);
+void debug_task_fn(void* ignore);
 
 // Visualization
-void drawPIDGraph(double error, int timeStep, bool isTurning);
+void resetGraph();
+void drawTargetGraph(double target, double current, double scale);
 
 // PID Movements
 void driveReversePID(double targetDistance, double maxSpeed, double timeout);
 void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeadingDeg, double timeout);
 void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout);
-void debug_task_fn(void* ignore);
-int get_raw();
 
+// REAL-TIME TUNER
+void tuningLoop();
 
 #endif // _ODOMETRY_HPP_
