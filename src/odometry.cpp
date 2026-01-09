@@ -11,7 +11,7 @@ const double HEADING_OFFSET = 2.72;  // Right Vertical Wheel
 const double SIDEWAYS_OFFSET = 6.55; // Horizontal Wheel
 
 // TUNE THIS MANUALLY using the "Spin Test"
-double TRACK_WIDTH = 14.75; 
+double TRACK_WIDTH = 5.94;//6.76; 
 int graph_x = 0;
 
 // ==========================================
@@ -277,7 +277,7 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
 // ==========================================
 //          PID: DRIVE FORWARD
 // ==========================================
-void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
+void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeadingDeg, double timeout) {
     // --- TUNING VALUES ---
     double kP = 7.0; 
     double kI = 0.003; 
@@ -297,7 +297,7 @@ void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
 
     double startX = robot_x; 
     double startY = robot_y;
-    double targetTheta = robot_theta; // Locks angle at the start
+    double targetTheta = fixedHeadingDeg * (M_PI / 180.0);
 
     double error = 0, prevError = 0, integral = 0, derivative = 0;
     double graphScale = 2.5; 
@@ -384,55 +384,64 @@ void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
 //          PID: TURN TO ANGLE
 // ==========================================
 void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
+    resetGraph();
     // --- Config ---
-    double kP = 4.0; double kI = 0.05; double kD = 8.5;
-    
-    // Graphing Scale: 90 degrees = ~60 pixels height (Zoomed out compared to drive)
+    double kP = 1.4; double kI = 0.0; double kD = 13.0;
     double graphScale = 0.8; 
 
-    // --- Setup ---
     double targetRad = targetAngleDeg * (M_PI / 180.0);
-    double error = 0, prevError = 0, integral = 0, derivative = 0;
-    
-    // We need to track "relative" angle for the graph to look nice (starting at 0)
-    // OR we can plot absolute. Let's plot Error-based Target vs Actual.
-    // Target = Angle desired, Current = Angle moved.
     double startTheta = robot_theta;
-
     uint32_t startTime = pros::millis();
 
-    while (pros::millis() - startTime < timeout) {
-        error = targetRad - robot_theta;
-        while (error > M_PI) error -= 2 * M_PI;
-        while (error < -M_PI) error += 2 * M_PI;
+    double error = 0, prevError = 0, integral = 0, derivative = 0;
+    
+    // Initialize prevError to prevent "derivative kick" at the start
+    double initialErrorRad = targetRad - robot_theta;
+    while (initialErrorRad > M_PI) initialErrorRad -= 2 * M_PI;
+    while (initialErrorRad < -M_PI) initialErrorRad += 2 * M_PI;
+    prevError = initialErrorRad * (180.0 / M_PI);
 
-        // For Graphing: We want to show 0 -> 90
-        // Current Angle relative to start of turn:
+    while (pros::millis() - startTime < timeout) {
+        // 1. Calculate Error in Radians (standard wrap logic)
+        double errorRad = targetRad - robot_theta;
+        while (errorRad > M_PI) errorRad -= 2 * M_PI;
+        while (errorRad < -M_PI) errorRad += 2 * M_PI;
+
+        // 2. CONVERT TO DEGREES FOR PID
+        // This is the missing line that fixes your weak turn!
+        double errorDeg = errorRad * (180.0 / M_PI);
+
+        // --- GRAPHING (Relative Degrees) ---
         double currentRelDeg = (robot_theta - startTheta) * (180.0 / M_PI);
-        // Target Angle relative to start of turn:
         double targetRelDeg = (targetRad - startTheta) * (180.0 / M_PI);
-        
-        // --- UPDATE GRAPH ---
         drawTargetGraph(targetRelDeg, currentRelDeg, graphScale);
 
-        // PID Calc
-        if (std::abs(error) < (10.0 * M_PI/180)) integral += error; else integral = 0;
-        if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
-        derivative = error - prevError;
-
-        double power = (error * kP) + (integral * kI) + (derivative * kD);
+        // 3. PID Calc (Using Degrees)
+        if (std::abs(errorDeg) < 10.0) integral += errorDeg; 
+        else integral = 0;
         
+        if ((errorDeg > 0 && prevError < 0) || (errorDeg < 0 && prevError > 0)) integral = 0;
+        
+        derivative = errorDeg - prevError;
+
+        double power = (errorDeg * kP) + (integral * kI) + (derivative * kD);
+        
+        // 4. Cap Speed
         if (power > maxSpeed) power = maxSpeed;
         if (power < -maxSpeed) power = -maxSpeed;
 
         left_motor_group.move_velocity(power);
         right_motor_group.move_velocity(-power);
 
-        if (std::abs(error) < (1.0 * M_PI/180) && std::abs(derivative) < 0.05) break;
+        // 5. Exit Condition
+        if (std::abs(errorDeg) < 1.0 && std::abs(derivative) < 0.1) break;
 
-        prevError = error;
+        prevError = errorDeg;
         pros::delay(20);
     }
-     left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
+    left_motor_group.move_velocity(0);
+    right_motor_group.move_velocity(0);
+    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }

@@ -52,7 +52,7 @@ void drawPIDGraph(double error, int timeStep, bool isTurning);
 
 // PID Movements
 void driveReversePID(double targetDistance, double maxSpeed, double timeout);
-void driveForwardPID(double targetDistance, double maxSpeed, double timeout);
+void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeadingDeg, double timeout);
 void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout);
 void debug_task_fn(void* ignore);
 int get_raw();

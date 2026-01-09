@@ -4,12 +4,17 @@
 #include "helpers.hpp"
 
 void AS5600_autonSkills(){
-    driveForwardPID(34, 50, 5000);
- 
+    // // 1. Drive forward 24 inches, maintaining 0 degrees heading
+    // driveForwardPID(24, 50, 0, 2000);
 
-    // driveForwardPID(18, 100, 3000);
+    // 2. Turn to 90 degrees
+    turnToAnglePID(90, 60, 3000);
     // pros::delay(500);
-    // driveReversePID(18, 50, 4000);
+    // turnToAnglePID(0, 80, 3000);
+    
+    // 3. Drive forward 24 inches, maintaining EXACTLY 90 degrees
+    // Even if the turn finished at 88 degrees, this will correct it back to 90 immediately.
+    // driveForwardPID(24, 100, 90, 2000);
 }
 
 void hardCoded2v2Auton(){
