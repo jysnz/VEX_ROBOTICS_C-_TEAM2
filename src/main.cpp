@@ -196,6 +196,9 @@ void opcontrol() {
 
 // --- Autonomous ---
 void autonomous() {
+    forward_odom.calibrate();
+    heading_odom.calibrate();
+    sideways_odom.calibrate();
     // forward_odom.reset(); heading_odom.reset(); sideways_odom.reset();
     // robot_x = 0; robot_y = 0; robot_theta = 0;
     AS5600_autonSkills();

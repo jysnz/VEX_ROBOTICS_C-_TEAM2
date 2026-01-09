@@ -4,9 +4,11 @@
 #include "helpers.hpp"
 
 void AS5600_autonSkills(){
-    driveForwardPID(12, 100, 1000);
-    pros::delay(500);
-    driveForwardPID(24, 100, 1000);
+    driveForwardPID(100, 50, 5000);
+    pros::delay(1000);
+    turnToAnglePID(90, 50, 1000);
+    pros::delay(1000);
+    driveForwardPID(12, 70, 1000);
 
     // driveForwardPID(18, 100, 3000);
     // pros::delay(500);

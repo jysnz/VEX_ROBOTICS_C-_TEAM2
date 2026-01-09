@@ -277,15 +277,11 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
 // ==========================================
 //          PID: DRIVE FORWARD
 // ==========================================
-
-//KP = 4.0
-//KI = 0.0
-//KD = 0.79
 void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
-    double kP = 4.0; 
-    double kI = 0.0; 
-    double kD = 0.91; 
-    double kP_Heading = 10.0; 
+    double kP = 7.0; 
+    double kI = 0.003; 
+    double kD = 2.43; 
+    double kP_Heading = 0.0; 
     double startI = 3.0; 
 
     // Setup
