@@ -6,8 +6,8 @@
 //          CONFIGURATION
 // ==========================================
 const double WHEEL_DIAMETER = 3.05;
-const double FORWARD_OFFSET = -0.66; // Left Vertical Wheel
-const double HEADING_OFFSET = 1.64;  // Right Vertical Wheel
+const double FORWARD_OFFSET = -3.22; // Left Vertical Wheel
+const double HEADING_OFFSET = 2.72;  // Right Vertical Wheel
 const double SIDEWAYS_OFFSET = 6.55; // Horizontal Wheel
 
 // TUNE THIS MANUALLY using the "Spin Test"
@@ -278,81 +278,107 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
 //          PID: DRIVE FORWARD
 // ==========================================
 void driveForwardPID(double targetDistance, double maxSpeed, double timeout) {
+    // --- TUNING VALUES ---
     double kP = 7.0; 
     double kI = 0.003; 
     double kD = 2.43; 
-    double kP_Heading = 0.0; 
+    
+    // NEW: Heading Gain Scheduling
+    double startHeadingKP = 10.0;  // Strong correction at launch to prevent drift
+    double endHeadingKP = 0.0;     // Weak/Zero correction during the drive to prevent wavy lines
+    double fadeDistance = 5.0;    // The distance (in units) over which to fade the correction
+    
+    // Keep your end-of-movement correction
+    double finalParkingKP = 2.0;   
+    
     double startI = 3.0; 
+    double accelStep = 6.0;      
+    double appliedPower = 0.0;   
 
-    // Setup
     double startX = robot_x; 
     double startY = robot_y;
-    double targetTheta = robot_theta;
+    double targetTheta = robot_theta; // Locks angle at the start
+
     double error = 0, prevError = 0, integral = 0, derivative = 0;
-    
-    // Graphing
     double graphScale = 2.5; 
 
     uint32_t startTime = pros::millis();
 
     while (pros::millis() - startTime < timeout) {
-        // 1. Calculate Distance
+
+        // 1. Distance Calculation
         double distTraveled = std::hypot(robot_x - startX, robot_y - startY);
         if (targetDistance < 0) distTraveled = -distTraveled;
-        
         error = targetDistance - distTraveled;
 
-        // Update Graph
-        drawTargetGraph(targetDistance, distTraveled, graphScale); 
+        drawTargetGraph(targetDistance, distTraveled, graphScale);
 
-        // 2. PID Calculations
-        if (std::abs(error) < startI) integral += error; else integral = 0;
+        // 2. Main Distance PID
+        if (std::abs(error) < startI) integral += error;
+        else integral = 0;
+
         if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
-        // Anti-Drift: Kill integral if VERY close
         if (std::abs(error) < 0.5) integral = 0;
 
         derivative = error - prevError;
-        double masterPower = (error * kP) + (integral * kI) + (derivative * kD);
 
-        // Min Power Boost
-        if (std::abs(masterPower) < 10 && std::abs(error) > 1.0) { 
-             masterPower = (masterPower > 0) ? 10 : -10;
-        }
+        double targetPower = (error * kP) + (integral * kI) + (derivative * kD);
 
-        // Cap speed
-        if (masterPower > maxSpeed) masterPower = maxSpeed;
-        if (masterPower < -maxSpeed) masterPower = -maxSpeed;
-        
-        // 3. Heading Correction
+        if (std::abs(targetPower) < 10 && std::abs(error) > 1.0)
+            targetPower = (targetPower > 0) ? 10 : -10;
+
+        targetPower = std::clamp(targetPower, -maxSpeed, maxSpeed);
+
+        // 3. Slew Rate
+        if (targetPower > appliedPower + accelStep) appliedPower += accelStep;
+        else if (targetPower < appliedPower - accelStep) appliedPower -= accelStep;
+        else appliedPower = targetPower;
+
+        // 4. HEADING CORRECTION (MODIFIED)
         double headingError = targetTheta - robot_theta;
         while (headingError > M_PI) headingError -= 2 * M_PI;
         while (headingError < -M_PI) headingError += 2 * M_PI;
-        
-        double currentHeadingKP = (std::abs(error) < 2.0) ? 2.0 : kP_Heading;
-        double turnCorrection = headingError * currentHeadingKP;
 
-        // --- THE FIX IS HERE ---
-        // If we are reversing, we must invert the steering direction
-        if (targetDistance < 0) {
-            turnCorrection = -turnCorrection;
+        double currentHeadingKP = 0.0;
+
+        // Logic: Are we at the very end? (Parking)
+        if (std::abs(error) < 2.0) {
+            currentHeadingKP = finalParkingKP;
+        } 
+        // Logic: Are we at the start? (Launch)
+        else if (std::abs(distTraveled) < fadeDistance) {
+            // Calculate how far into the fade we are (0.0 to 1.0)
+            double progress = std::abs(distTraveled) / fadeDistance;
+            
+            // Linear interpolation from startHeadingKP down to endHeadingKP
+            currentHeadingKP = startHeadingKP - (progress * (startHeadingKP - endHeadingKP));
+        } 
+        // Logic: We are in the middle (Cruising)
+        else {
+            currentHeadingKP = endHeadingKP;
         }
 
-        left_motor_group.move_velocity(masterPower + turnCorrection);
-        right_motor_group.move_velocity(masterPower - turnCorrection);
+        double turnCorrection = headingError * currentHeadingKP;
 
-        // 4. Exit Conditions
-        // Wait until error is small AND speed (derivative) is near zero
+        // Reverse correction if driving backwards
+        if (targetDistance < 0) turnCorrection = -turnCorrection;
+
+        left_motor_group.move_velocity(appliedPower + turnCorrection);
+        right_motor_group.move_velocity(appliedPower - turnCorrection);
+
+        // 5. Exit
         if (std::abs(error) < 0.5 && std::abs(derivative) < 0.1) break;
 
         prevError = error;
         pros::delay(20);
     }
-    
+
     left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
     left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }
+
 
 // ==========================================
 //          PID: TURN TO ANGLE
