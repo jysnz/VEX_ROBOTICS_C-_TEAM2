@@ -20,7 +20,7 @@ void initialize() {
     
     // Start the screen display
     // pros::Task debug_task(debug_task_fn, NULL, "Debug");
-    startScreenTask();
+    tuningLoop();
     
 }
 

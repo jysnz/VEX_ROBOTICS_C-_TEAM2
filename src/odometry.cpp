@@ -23,10 +23,11 @@ double robot_theta = 0; // Radians
 
 // Tuning Graph Helper
 int graph_x = 0;
+int testMode = 0;
 
 // PID Defaults (Starting Values)
-PIDConfig forwardPID_Consts = { 7.0, 0.003, 2.43 };
-PIDConfig turnPID_Consts    = { 1.4, 0.00,  13.0 };
+PIDConfig forwardPID_Consts = { 6.00, 0.001, 2.00 };
+PIDConfig turnPID_Consts    = { 1.20, 0.010,  10.20};
 
 // Toggle for the Tuner
 bool tuningForward = true; 
@@ -392,63 +393,152 @@ void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
 // ==========================================
 //          REAL-TIME TUNER LOGIC
 // ==========================================
+// ==========================================
+//          CUSTOM PRECISION TUNER
+// ==========================================
 void tuningLoop() {
     pros::Controller master(pros::E_CONTROLLER_MASTER);
-    int selectedIndex = 0; // 0=P, 1=I, 2=D
-    double increments[] = {0.1, 0.001, 0.1}; 
-
-    // Initialize visualizer
     pros::lcd::initialize();
+    resetGraph(); 
+
+    const char* modeNames[] = { "Dr 24", "Dr 12", "SeqD", "Tn 90", "Tn 45", "SeqT" };
+    
+    // UI State
+    int currentParam = 0; // 0=P, 1=I, 2=D
+    int digitIndex = 2;   // Tracks which digit we are on
+    
+    uint32_t lastPrintTime = 0;
+
+    // --- CONFIGURATION PER PARAMETER ---
+    // We define different digits/weights for P/D vs I
+    
+    // P & D Config: Format %06.2f (e.g., 012.34)
+    // Digits: 100, 10, 1, 0.1, 0.01
+    double weightsPD[] = { 100.0, 10.0, 1.0, 0.1, 0.01 };
+    int cursorMapPD[]  = {  2,    3,    4,   6,    7   }; // Screen character positions
+    int maxIndexPD = 4; // 0 to 4
+
+    // I Config: Format %05.3f (e.g., 0.123)
+    // Digits: 1, 0.1, 0.01, 0.001
+    double weightsI[] = { 1.0, 0.1, 0.01, 0.001 };
+    int cursorMapI[]  = {  2,   4,    5,     6  }; // Screen character positions ("0.123")
+    int maxIndexI = 3; // 0 to 3
 
     while (true) {
-        PIDConfig* currentConfig = tuningForward ? &forwardPID_Consts : &turnPID_Consts;
+        bool isTurnMode = (testMode >= 3);
+        PIDConfig* currentConfig = isTurnMode ? &turnPID_Consts : &forwardPID_Consts;
+        
+        // Determine which settings to use based on currentParam
+        double* currentWeights;
+        int* currentMap;
+        int currentMaxIndex;
+        
+        if (currentParam == 1) { // kI
+            currentWeights = weightsI;
+            currentMap = cursorMapI;
+            currentMaxIndex = maxIndexI;
+        } else { // kP or kD
+            currentWeights = weightsPD;
+            currentMap = cursorMapPD;
+            currentMaxIndex = maxIndexPD;
+        }
 
-        // Draw GUI
-        pros::lcd::print(0, "MODE: %s (X to Swap)", tuningForward ? "DRIVE 24\"" : "TURN 90deg");
-        pros::lcd::print(1, "%sP:%.2f %sI:%.4f %sD:%.2f", 
-            (selectedIndex == 0 ? ">" : " "), currentConfig->kP,
-            (selectedIndex == 1 ? ">" : " "), currentConfig->kI,
-            (selectedIndex == 2 ? ">" : " "), currentConfig->kD
-        );
-        pros::lcd::print(2, "Diff: %.3f | A: Run | B: Reset", increments[selectedIndex]);
+        // Safety: If we switched params and index is out of bounds, fix it
+        if (digitIndex > currentMaxIndex) digitIndex = currentMaxIndex;
 
-        // Input
+        // --- 1. DISPLAY ---
+        if (pros::millis() - lastPrintTime > 100) {
+            // Line 0: Mode
+            master.print(0, 0, "M:%s", modeNames[testMode]); 
+            pros::delay(50); 
+
+            // Line 1: Value (Formatted Differently)
+            if (currentParam == 0) { // P
+                master.print(1, 0, "P:%06.2f", currentConfig->kP);
+            } 
+            else if (currentParam == 1) { // I
+                master.print(1, 0, "I:%05.3f", currentConfig->kI);
+            } 
+            else { // D
+                master.print(1, 0, "D:%06.2f", currentConfig->kD);
+            }
+            pros::delay(50);
+
+            // Line 2: The Cursor
+            char cursorStr[20];
+            memset(cursorStr, ' ', 19); cursorStr[19] = '\0';
+            
+            // Place caret using the map
+            int screenPos = currentMap[digitIndex];
+            cursorStr[screenPos] = '^';
+            
+            master.print(2, 0, "%s", cursorStr);
+            
+            lastPrintTime = pros::millis();
+        }
+
+        // --- 2. INPUTS ---
+
+        // CHANGE MODE (X)
         if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) {
-            tuningForward = !tuningForward;
+            testMode++; if(testMode > 5) testMode = 0;
             resetGraph();
         }
+
+        // SELECT PARAMETER (Left / Right)
         if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
-            selectedIndex = (selectedIndex + 1) % 3;
+            currentParam++; if(currentParam > 2) currentParam = 0;
+            digitIndex = 2; // Reset cursor to "1s" place for convenience
         }
         if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
-            selectedIndex--;
-            if (selectedIndex < 0) selectedIndex = 2;
+            currentParam--; if(currentParam < 0) currentParam = 2;
+            digitIndex = 2;
         }
-        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
-            if (selectedIndex == 0) currentConfig->kP += increments[0];
-            else if (selectedIndex == 1) currentConfig->kI += increments[1];
-            else if (selectedIndex == 2) currentConfig->kD += increments[2];
+
+        // SELECT DIGIT (R1 / R2)
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R2)) { // Move Right (Precise)
+            digitIndex++; 
+            if(digitIndex > currentMaxIndex) digitIndex = currentMaxIndex;
         }
-        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
-            if (selectedIndex == 0) currentConfig->kP -= increments[0];
-            else if (selectedIndex == 1) currentConfig->kI -= increments[1];
-            else if (selectedIndex == 2) currentConfig->kD -= increments[2];
-            
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1)) { // Move Left (Coarse)
+            digitIndex--;
+            if(digitIndex < 0) digitIndex = 0;
+        }
+
+        // EDIT VALUE (Up / Down)
+        bool up = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP);
+        bool down = master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN);
+
+        if (up || down) {
+            double change = currentWeights[digitIndex];
+            if (down) change = -change;
+
+            if (currentParam == 0) currentConfig->kP += change;
+            else if (currentParam == 1) currentConfig->kI += change;
+            else if (currentParam == 2) currentConfig->kD += change;
+
+            // Clamp to 0
             if(currentConfig->kP < 0) currentConfig->kP = 0;
             if(currentConfig->kI < 0) currentConfig->kI = 0;
             if(currentConfig->kD < 0) currentConfig->kD = 0;
         }
-        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
-            robot_x = 0; robot_y = 0; robot_theta = 0;
-            forward_odom.reset(); heading_odom.reset(); sideways_odom.reset();
-            resetGraph();
-        }
+
+        // RUN TEST (A)
         if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
             resetGraph();
-            if (tuningForward) driveForwardPID(24.0, 400, 0, 2000); 
-            else turnToAnglePID(90.0, 300, 1500);
+            if (testMode == 0) driveForwardPID(24.0, 100, 0, 2000);
+            else if (testMode == 1) driveForwardPID(12.0, 100, 0, 1500);
+            else if (testMode == 2) { driveForwardPID(12.0, 100, 0, 1500); pros::delay(300); driveForwardPID(12.0, 100, 0, 1500); pros::delay(300); driveReversePID(24.0, 100, 2500); }
+            else if (testMode == 3) turnToAnglePID(90.0, 50, 1500);
+            else if (testMode == 4) turnToAnglePID(45.0, 50, 1500);
+            else if (testMode == 5) { turnToAnglePID(45.0, 50, 1500); pros::delay(500); turnToAnglePID(90.0, 50, 1500); pros::delay(500); turnToAnglePID(0.0, 50, 2000); }
         }
 
+        // RESET ODOM (B)
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
+            robot_x = 0; robot_y = 0; robot_theta = 0;
+            resetGraph();
+        }
         pros::delay(20);
     }
 }
