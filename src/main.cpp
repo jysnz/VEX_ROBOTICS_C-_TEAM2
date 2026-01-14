@@ -9,19 +9,9 @@
 void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
-    // // matchloader.move_absolute(-1700, 100);
-    // // Start the math engine
-    // forward_odom.calibrate();
-    // heading_odom.calibrate();
-    // sideways_odom.calibrate();
 
     // 2. Start the math engine
-    // pros::Task odom_task(odom_task_fn, NULL, "Odometry");
-    
-    // Start the screen display
-    // pros::Task debug_task(debug_task_fn, NULL, "Debug");
-    // sensorDirectionTest();
-    
+    pros::Task odom_task(odom_task_fn, NULL, "Odometry");
 }
 
 // --- Operator Control ---

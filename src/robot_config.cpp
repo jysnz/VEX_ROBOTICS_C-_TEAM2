@@ -9,14 +9,25 @@ pros::Motor intake(4, pros::MotorGears::green);
 pros::Motor matchloader(5, pros::MotorGears::red);
 pros::Motor discore(12, pros::MotorGears::green);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
+
+// --- Sensors ---
 pros::adi::Ultrasonic ultrasonic('D', 'E');
+
+// [CHANGE] Define GPS Sensor
+// Port 20
+// X Offset: 0.00 meters (Centered Left/Right)
+// Y Offset: -0.152 meters (Mounted 6 inches to the back)
+// Heading Offset: 180 degrees (Facing backwards)
+pros::Gps gps_sensor(20, 0.00, -0.152, 180); 
 
 // --- Drivetrain & Odometry Setup ---
 lemlib::Drivetrain drivetrain(&left_motor_group, &right_motor_group, 14.5,
-                              lemlib::Omniwheel::NEW_325, 500, 4);
+    lemlib::Omniwheel::NEW_325, 500, 4);
 
-lemlib::OdomSensors sensors(nullptr, nullptr, nullptr, nullptr,
-                            nullptr);
+// Note: We still keep these nullptr for LemLib because we are handling
+// our own custom odometry logic in odometry.cpp
+lemlib::OdomSensors sensors(nullptr, nullptr, nullptr, nullptr, nullptr);
+
 lemlib::ControllerSettings lateral_controller(6, 0.001, 2, 3, 1, 100, 3, 500, 20);
 lemlib::ControllerSettings angular_controller(1.20, 0.100, 10.20, 0, 0, 0, 0, 0, 0);
 lemlib::ExpoDriveCurve throttle_curve(3, 10, 1.019);

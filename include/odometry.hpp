@@ -41,11 +41,12 @@ public:
 extern double robot_x;
 extern double robot_y;
 extern double robot_theta; // In Radians
+extern pros::Mutex odom_mutex;
 
 // --- Sensor Objects ---
-extern AS5600 forward_odom;
-extern AS5600 heading_odom;
-extern AS5600 sideways_odom;
+// Updated to reflect the 2-wheel vertical setup
+extern AS5600 forward_odom; // Left Tracker
+extern AS5600 heading_odom; // Right Tracker
 
 // --- Function Prototypes ---
 
@@ -56,6 +57,11 @@ void debug_task_fn(void* ignore);
 // Visualization
 void resetGraph();
 void drawTargetGraph(double target, double current, double scale);
+
+// Position Correction Helpers
+void resetOdometry();
+void fixPositionWithUltrasonic();
+void fixPoseWithGPS();
 
 // PID Movements
 void driveReversePID(double targetDistance, double maxSpeed, double timeout);

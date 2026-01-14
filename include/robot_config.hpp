@@ -1,3 +1,6 @@
+#ifndef _ROBOT_CONFIG_HPP_
+#define _ROBOT_CONFIG_HPP_
+
 #include "main.h"
 #include "lemlib/api.hpp"
 
@@ -19,6 +22,12 @@ extern pros::Motor matchloader;
 extern pros::Motor discore;
 extern pros::Controller controller;
 
-// --- Sensors & Chassis ---
+// --- Sensors ---
 extern pros::adi::Ultrasonic ultrasonic;
+// [CHANGE] Declare the GPS sensor here
+extern pros::Gps gps_sensor; 
+
+// --- Chassis ---
 extern lemlib::Chassis chassis;
+
+#endif // _ROBOT_CONFIG_HPP_
