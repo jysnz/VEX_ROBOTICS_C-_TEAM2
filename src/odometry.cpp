@@ -21,6 +21,8 @@ double robot_x = 0;
 double robot_y = 0;
 double robot_theta = 0; // Radians
 
+pros::Mutex odom_mutex;
+
 // Tuning Graph Helper
 int graph_x = 0;
 int testMode = 0;
@@ -56,7 +58,7 @@ void AS5600::update() {
     int current_raw = sensor.get_value();
     int delta = current_raw - last_raw;
 
-    if (std::abs(delta) < 5) return; // DEADBAND
+    // if (std::abs(delta) < 5) return; // DEADBAND
 
     // WRAP LOGIC
     if (delta > 2048) delta -= 4096; 
@@ -185,9 +187,6 @@ void debug_task_fn(void* ignore) {
     }
 }
 
-// ==========================================
-//          PID: FORWARD (Adjustable)
-// ==========================================
 void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeadingDeg, double timeout) {
     // USE GLOBAL CONFIGS
     double kP = forwardPID_Consts.kP;
@@ -195,9 +194,9 @@ void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeading
     double kD = forwardPID_Consts.kD;
 
     double startHeadingKP = 10.0;  
-    double endHeadingKP = 0.0;    
+    double endHeadingKP = 2.0;    // FIX 1: Changed from 0.0 to 2.0 to keep robot straight
     double fadeDistance = 5.0;    
-    double finalParkingKP = 2.0;   
+    double finalParkingKP = 5.0;  // Increased slightly
     
     double startI = 3.0; 
     double accelStep = 6.0;      
@@ -220,30 +219,34 @@ void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeading
         drawTargetGraph(targetDistance, distTraveled, graphScale);
 
         if (std::abs(error) < startI) integral += error; else integral = 0;
+        
+        // Anti-Windup
         if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
-        if (std::abs(error) < 0.5) integral = 0;
 
         derivative = error - prevError;
         double targetPower = (error * kP) + (integral * kI) + (derivative * kD);
 
-        // Boost min power
-        if (std::abs(targetPower) < 10 && std::abs(error) > 1.0)
+        // Min power boost to overcome static friction
+        if (std::abs(targetPower) < 10 && std::abs(error) > 0.5)
             targetPower = (targetPower > 0) ? 10 : -10;
 
         targetPower = std::clamp(targetPower, -maxSpeed, maxSpeed);
 
-        // Slew
+        // Slew Rate
         if (targetPower > appliedPower + accelStep) appliedPower += accelStep;
         else if (targetPower < appliedPower - accelStep) appliedPower -= accelStep;
         else appliedPower = targetPower;
 
-        // Heading
+        // Heading Calculation
         double headingError = targetTheta - robot_theta;
         while (headingError > M_PI) headingError -= 2 * M_PI;
         while (headingError < -M_PI) headingError += 2 * M_PI;
+        
+        // Convert to degrees for KP
+        double headingErrorDeg = headingError * (180.0 / M_PI);
 
         double currentHeadingKP = 0.0;
-        if (std::abs(error) < 2.0) currentHeadingKP = finalParkingKP;
+        if (std::abs(error) < 4.0) currentHeadingKP = finalParkingKP;
         else if (std::abs(distTraveled) < fadeDistance) {
             double progress = std::abs(distTraveled) / fadeDistance;
             currentHeadingKP = startHeadingKP - (progress * (startHeadingKP - endHeadingKP));
@@ -251,20 +254,24 @@ void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeading
             currentHeadingKP = endHeadingKP;
         }
 
-        double turnCorrection = headingError * currentHeadingKP;
-        if (targetDistance < 0) turnCorrection = -turnCorrection;
+        double turnCorrection = headingErrorDeg * currentHeadingKP;
+        if (targetDistance < 0) turnCorrection = -turnCorrection; // Invert for reverse
 
         left_motor_group.move_velocity(appliedPower + turnCorrection);
         right_motor_group.move_velocity(appliedPower - turnCorrection);
 
+        // Exit Condition
         if (std::abs(error) < 0.5 && std::abs(derivative) < 0.1) break;
 
         prevError = error;
         pros::delay(20);
     }
     
+    // FIX 2: Stop and Hold
     left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
+    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }
 
 // ==========================================

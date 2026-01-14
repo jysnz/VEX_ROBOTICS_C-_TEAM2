@@ -16,5 +16,8 @@ void updateOdometry();
 void odometryTask();
 void startScreenTask();
 void startTuningUI(); 
+void sensorDirectionTest();
+void motorDirectionTest();
+void catapultControls();
 
 #endif

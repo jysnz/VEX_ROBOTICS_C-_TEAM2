@@ -140,3 +140,111 @@ void startTuningUI() {
     });
 }
 
+void sensorDirectionTest() {
+     // Clear screen
+    pros::lcd::initialize();
+
+    // 1. Reset sensors to 0 immediately on startup
+    forward_odom.reset();
+    heading_odom.reset();
+    
+    // Give them a moment to clear
+    pros::delay(100);
+    // --- DIAGNOSTIC MODE ---
+    
+    while (true) {
+        forward_odom.update();
+        heading_odom.update();
+        // Read raw inches from your odometry class
+        double left_inches  = forward_odom.get_inches();
+        double right_inches = heading_odom.get_inches(); // This is your other parallel wheel
+        
+        // Print to the brain screen
+        // "L" = Forward/Left Pod
+        // "R" = Heading/Right Pod
+        pros::lcd::print(2, "PUSH FORWARD TEST:");
+        pros::lcd::print(3, "L (Forward): %.2f", left_inches);
+        pros::lcd::print(4, "R (Heading): %.2f", right_inches);
+        
+        pros::delay(20);
+    }
+}
+
+void motorDirectionTest(){
+    // --- MOTOR TEST ---
+    pros::lcd::initialize();
+    pros::lcd::print(2, "MOTOR TEST - STAND CLEAR");
+    pros::delay(1000);
+
+    // Run both sides at 30% power
+    left_motor_group.move_velocity(60); 
+    right_motor_group.move_velocity(60);
+    
+    while(true) {
+        pros::delay(10); // Keep running
+    }
+}
+
+void catapultControls() {
+    const int MAX_SPEED = 127;
+    static bool controlsReversed = false;
+
+    while (true) {
+        
+        // pros::lcd::print(0, "X: %f", robot_x);
+        // pros::lcd::print(1, "Y: %f", robot_y);
+        // pros::lcd::print(2, "Theta: %f", rozbot_theta * (180/M_PI)); // Convert to degrees
+        // pros::delay(20);
+
+        bool intakeForward = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+        bool intakeReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+        bool intakePause = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+        bool auton = controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
+
+        bool catapultArm = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        bool discoreDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_A);
+        bool discoreUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_X);
+
+        bool matchLoadUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_B); 
+        bool matchLoadDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
+
+        bool reverseControlTap = controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN);
+
+        int move = -controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int turn = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        if (reverseControlTap) controlsReversed = !controlsReversed;
+        if(auton) autonomous();
+
+        if (controlsReversed) move = -move;
+
+        int leftMotorSpeed = std::clamp(move + turn, -MAX_SPEED, MAX_SPEED);
+        int rightMotorSpeed = std::clamp(move - turn, -MAX_SPEED, MAX_SPEED);
+
+        left_motor_group.move(leftMotorSpeed);
+        right_motor_group.move(rightMotorSpeed);
+
+        if (catapultArm){
+            catapult_arm.move_absolute(-600, 40); 
+            discore.move_absolute(0, 200);
+            intake.move_velocity(-200);
+            pros::delay(300);
+            intake.move_velocity(0);
+        } 
+        else catapult_arm.move_absolute(0, 400);
+
+        if (discoreDown) {
+            discore.move_absolute(0, 200);
+        }
+        else if (discoreUp) discore.move_absolute(800, 200);
+
+        if (matchLoadUp && !matchLoadDown)     matchloader.move_absolute(-100, 100);
+        else if (matchLoadDown && !matchLoadUp) matchloader.move_absolute(-1400, 100);
+
+        if (intakeForward && !intakeReverse) intake.move_velocity(200);
+        else if (intakeReverse && !intakeForward) intake.move_velocity(-200);
+        if (intakePause) intake.move_velocity(0);
+
+        pros::delay(20);
+    }
+}
