@@ -24,6 +24,7 @@ double robot_y = 0;
 double robot_theta = 0; // Radians
 bool useGpsHealing = false; // Starts OFF for pure PID tuning
 
+
 pros::Mutex odom_mutex;
 
 // Tuning Graph Helper
@@ -89,7 +90,7 @@ void AS5600::reset() {
 //          SENSOR OBJECTS
 // ==========================================   
 // Check these ports/directions match your physical wiring!
-AS5600 forward_odom('C', true);   // Treated as LEFT Wheel
+AS5600 forward_odom('A', true);   // Treated as LEFT Wheel
 AS5600 heading_odom('B', false);  // Treated as RIGHT Wheel
 
 
@@ -286,65 +287,111 @@ void debug_task_fn(void* ignore) {
     }
 }
 
-// ==========================================
-//          PID: FORWARD (Slew + Drift Fix)
-// ==========================================
-void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeadingDeg, double timeout) {
-    // Auto-Reset for relative moves
-    resetOdometry();
-    resetGraph();
+// ============================
+// DRIVE FORWARD WITH GPS DRIFT CORRECTION
+// ============================
+void driveForwardPID(double targetInches, double maxSpeed, double timeout) {
+    // Reset odometry for relative move
+    // resetOdometry();
+    uint32_t startTime = pros::millis();
 
+    // Distance PID constants
     double kP = forwardPID_Consts.kP;
     double kI = forwardPID_Consts.kI;
     double kD = forwardPID_Consts.kD;
 
-    double error = 0, prevError = 0, integral = 0, derivative = 0;
-    
-    // SLEW RATE (Soft Start)
-    double appliedPower = 0; 
-    double slewStep = 8.0; 
+    double distError = 0, prevDistError = 0, distIntegral = 0;
 
-    uint32_t startTime = pros::millis();
+    // Heading PID constants (encoder-based)
+    double hP = 2.75;
+    double hD = 4.0;
+    double prevHeadingError = 0;
+
+    // Slew rate
+    double drivePower = 0;
+    const double slewStep = 6.0;
 
     while (pros::millis() - startTime < timeout) {
-        // Distance is Average of Left and Right
-        double currentDist = (forward_odom.get_inches() + heading_odom.get_inches()) / 2.0;
-        
-        error = targetDistance - currentDist;
-        drawTargetGraph(targetDistance, currentDist, 2.5);
+        odom_mutex.take(); // thread-safe access
 
-        // PID
-        if (std::abs(error) < 4.0) integral += error; else integral = 0;
-        if ((error > 0 && prevError < 0) || (error < 0 && prevError > 0)) integral = 0;
-        
-        derivative = error - prevError;
-        double targetPower = (error * kP) + (integral * kI) + (derivative * kD);
+        // ----------------------
+        // Current distance
+        // ----------------------
+        double leftDist  = forward_odom.get_inches();
+        double rightDist = heading_odom.get_inches();
+        double currentDist = (leftDist + rightDist) * 0.5;
 
-        // --- SLEW RATE LIMITER ---
-        if (targetPower > appliedPower + slewStep) appliedPower += slewStep;
-        else if (targetPower < appliedPower - slewStep) appliedPower -= slewStep;
-        else appliedPower = targetPower;
+        // Distance PID
+        distError = targetInches - robot_y; // use robot_y as forward
+        double distDerivative = distError - prevDistError;
+        if (std::abs(distError) < 4.0) distIntegral += distError; 
+        else distIntegral = 0;
 
-        appliedPower = std::clamp(appliedPower, -maxSpeed, maxSpeed);
+        double targetDrive = (distError * kP) + (distIntegral * kI) + (distDerivative * kD);
 
-        // --- HEADING CORRECTION ---
-        // Keep robot straight (at 0)
-        double headingCorrection = (0 - robot_theta) * (180.0 / M_PI) * 2.5;
+        // Slew rate
+        if (targetDrive > drivePower + slewStep) drivePower += slewStep;
+        else if (targetDrive < drivePower - slewStep) drivePower -= slewStep;
+        else drivePower = targetDrive;
 
-        left_motor_group.move_velocity(appliedPower + headingCorrection);
-        right_motor_group.move_velocity(appliedPower - headingCorrection);
+        drivePower = std::clamp(drivePower, -maxSpeed, maxSpeed);
 
-        if (std::abs(error) < 0.5 && std::abs(derivative) < 0.1) break;
+        // ----------------------
+        // Heading correction (encoder difference)
+        // ----------------------
+        double headingError = leftDist - rightDist; // positive = veer left
+        double headingDerivative = headingError - prevHeadingError;
+        double headingCorrection = (headingError * hP) + (headingDerivative * hD);
 
-        prevError = error;
+        // Deadband
+        if (std::abs(headingError) < 0.05) headingCorrection = 0;
+
+        // Scale heading correction with speed but keep minimum
+        double speedScale = std::max(std::abs(drivePower) / maxSpeed, 0.25);
+        headingCorrection *= speedScale;
+
+        // Extra authority near the end
+        if (std::abs(distError) < 3.0) headingCorrection *= 1.4;
+        headingCorrection = std::clamp(headingCorrection, -12.0, 12.0);
+
+        // ----------------------
+        // Optional GPS drift correction (x-axis)
+        // ----------------------
+        if (useGpsHealing) {
+            double gpsX = gps_sensor.get_position_x();
+            if (gpsX != DBL_MAX) { // valid GPS reading
+                gpsX *= 39.37; // meters → inches
+                const double alpha = 0.05; // small correction factor
+                robot_x = (robot_x * (1.0 - alpha)) + (gpsX * alpha);
+            }
+        }
+
+        odom_mutex.give();
+
+        // ----------------------
+        // Output to motors
+        // ----------------------
+        left_motor_group.move_velocity(drivePower + headingCorrection);
+        right_motor_group.move_velocity(drivePower - headingCorrection);
+
+        // ----------------------
+        // Exit condition
+        // ----------------------
+        if (std::abs(distError) < 0.5 && std::abs(distDerivative) < 0.1) break;
+
+        prevDistError = distError;
+        prevHeadingError = headingError;
+
         pros::delay(20);
     }
-    
+
+    // Stop motors
     left_motor_group.move_velocity(0);
     right_motor_group.move_velocity(0);
     left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 }
+
 
 // ==========================================
 //          PID: TURN (Slew Rate)
@@ -400,7 +447,7 @@ void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout) {
 //          PID: REVERSE
 // ==========================================
 void driveReversePID(double targetDistance, double maxSpeed, double timeout) {
-    driveForwardPID(-targetDistance, maxSpeed, 0, timeout);
+    driveForwardPID(-targetDistance, maxSpeed, timeout);
 }
 
 // ==========================================
@@ -452,8 +499,8 @@ void tuningLoop() {
 
         // A: RUN TEST (Auto Resets)
         if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
-            if (testMode == 0) driveForwardPID(24, 80, 0, 2000);
-            if (testMode == 1) driveForwardPID(48, 80, 0, 3000);
+            if (testMode == 0) driveForwardPID(24, 80, 2000);
+            if (testMode == 1) driveForwardPID(48, 80, 3000);
             if (testMode == 2) turnToAnglePID(90, 60, 2000);
             if (testMode == 3) turnToAnglePID(180, 60, 2500);
         }

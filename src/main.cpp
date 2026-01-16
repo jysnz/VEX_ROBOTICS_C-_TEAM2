@@ -23,7 +23,7 @@ void opcontrol() {
 // --- Autonomous ---
 void autonomous() {
 
-    driveForwardPID(48, 70, 0, 3000);
+    driveForwardPID(48, 60, 3000);
 
     // drive_for_inches_consistent(80, 12);
 

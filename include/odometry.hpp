@@ -11,6 +11,8 @@ struct PIDConfig {
     double kI;
     double kD;
 };
+extern double prev_L;
+extern double prev_R;
 
 // Global config objects (defined in .cpp)
 extern PIDConfig forwardPID_Consts;
@@ -65,7 +67,7 @@ void fixPoseWithGPS();
 
 // PID Movements
 void driveReversePID(double targetDistance, double maxSpeed, double timeout);
-void driveForwardPID(double targetDistance, double maxSpeed, double fixedHeadingDeg, double timeout);
+void driveForwardPID(double targetDistance, double maxSpeed, double timeout);
 void turnToAnglePID(double targetAngleDeg, double maxSpeed, double timeout);
 
 // REAL-TIME TUNER
