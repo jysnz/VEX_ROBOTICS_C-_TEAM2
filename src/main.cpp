@@ -17,12 +17,13 @@ void initialize() {
 // --- Operator Control ---
 void opcontrol() {
     catapultControls();       
+   
 }
 
 // --- Autonomous ---
 void autonomous() {
 
-    chassis.moveToPoint(0, 10, 3000);
+    driveForwardPID(48, 70, 0, 3000);
 
     // drive_for_inches_consistent(80, 12);
 

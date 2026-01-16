@@ -11,7 +11,7 @@ pros::Motor discore(12, pros::MotorGears::green);
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
 // --- Sensors ---
-pros::adi::Ultrasonic ultrasonic('D', 'E');
+pros::adi::Ultrasonic ultrasonic('A', 'B');
 
 // [CHANGE] Define GPS Sensor
 // Port 20

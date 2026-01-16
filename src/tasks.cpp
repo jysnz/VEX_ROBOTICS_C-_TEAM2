@@ -245,6 +245,10 @@ void catapultControls() {
         else if (intakeReverse && !intakeForward) intake.move_velocity(-200);
         if (intakePause) intake.move_velocity(0);
 
+        if (ultrasonic.get_value() > 0) {
+            intake.move_velocity(-200);
+        }
+
         pros::delay(20);
     }
 }

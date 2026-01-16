@@ -92,10 +92,6 @@ void AS5600::reset() {
 AS5600 forward_odom('C', true);   // Treated as LEFT Wheel
 AS5600 heading_odom('B', false);  // Treated as RIGHT Wheel
 
-// GPS SENSOR DEFINITION
-// Port 20, X Offset 0, Y Offset -6 (Mounted on back)
-// CHECK YOUR PORT AND MOUNTING!
-pros::Gps gps_sensor(20, 0.00, -0.152, 180); 
 
 // Note: 'ultrasonic' is already defined in robot_config.cpp
 
