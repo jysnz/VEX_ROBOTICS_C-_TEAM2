@@ -591,10 +591,13 @@ void opcontrol() {
     } else if (discoreUp)
       discore.move_absolute(800, 200);
 
-    if (matchLoadUp && !matchLoadDown)
+    if (matchLoadUp && !matchLoadDown){
       matchloader.move_absolute(0, 100);
-    else if (matchLoadDown && !matchLoadUp)
+      discore.move_absolute(800, 200);
+    }else if (matchLoadDown && !matchLoadUp){
       matchloader.move_absolute(1400, 100);
+      discore.move_absolute(0, 200);
+    }
 
     if (intakeForward && !intakeReverse)
       intake.move_velocity(200);
@@ -658,11 +661,18 @@ void twovtwoNormalAuton() {
 
   intake.move_velocity(0);
 
+  //After shooting
   left_motor_group.move_velocity(50);
-  pros::delay(940);
+  pros::delay(800);
   left_motor_group.move_velocity(0);
 
-  drive_for_inches(80, 45);
+  drive_for_inches(80, 11.5);
+
+  left_motor_group.move_velocity(50);
+  pros::delay(300);
+  left_motor_group.move_velocity(0);
+
+  drive_for_inches(80, 30);
 
   // Second matchload
   left_motor_group.move_velocity(-50);
