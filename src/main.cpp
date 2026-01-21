@@ -482,7 +482,6 @@ void opcontrol() {
 
 void twovtwoNormalAuton() {
   // Move to lower center goal
-  matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   matchloader.move_absolute(1400, 100);
   drive_for_inches(80, 24.4);
   pros::delay(500);
@@ -497,14 +496,9 @@ void twovtwoNormalAuton() {
   discore.move_absolute(800, 200);
   drive_for_inches(90, 8);
   pros::delay(1100);
-
+  
   drive_backward_for_inches(60, 14);
-
-  // right_motor_group.move_velocity(-50);
-  // pros::delay(100);
-  // right_motor_group.move_velocity(0);
-
-  // drive_backward_for_inches(70, 3);
+  matchloader.move_absolute(0, 200);
 
   pros::delay(500);
 
@@ -529,56 +523,18 @@ void twovtwoNormalAuton() {
   pros::delay(500);
   catapult_arm.move_absolute(0, 40);
 
-  intake.move_velocity(0);
+  matchloader.move_absolute(1400,200);
 
-  right_motor_group.move_velocity(50);
-  pros::delay(150);
-  right_motor_group.move_velocity(0);
-
-  left_motor_group.move_velocity(50);
-  pros::delay(150);
-  left_motor_group.move_velocity(0);
-
-  //After shooting
-  left_motor_group.move_velocity(50);
-  pros::delay(750);
-  left_motor_group.move_velocity(0);
-
-  drive_for_inches(80, 12);
-
-  left_motor_group.move_velocity(50);
-  pros::delay(150);
-  left_motor_group.move_velocity(0);
-
-  drive_for_inches(80, 35);
-
-  // Second matchload
-  left_motor_group.move_velocity(-50);
-  right_motor_group.move_velocity(50);
-  pros::delay(440);
-  left_motor_group.move_velocity(0);
-  right_motor_group.move_velocity(0);
-
-  intake.move_velocity(-200);
   discore.move_absolute(800, 200);
-  drive_for_inches(80, 5);
-  pros::delay(800);
+  drive_for_inches(80, 14);
 
-  drive_backward_for_inches(60, 23);
-
-  // right_motor_group.move_velocity(-50);
-  // pros::delay(100);
-  // right_motor_group.move_velocity(0);
-
-  // drive_backward_for_inches(70, 3);
-
-  pros::delay(500);
+  drive_backward_for_inches(80, 14);
 
   // shoot
   catapult_arm.move_absolute(-600, 200);
   discore.move_absolute(0, 200);
   intake.move_velocity(-200);
-  pros::delay(500);
+  pros::delay(1000);
   catapult_arm.move_absolute(0, 40);
 
   pros::delay(500);
@@ -595,14 +551,23 @@ void twovtwoNormalAuton() {
   pros::delay(500);
   catapult_arm.move_absolute(0, 40);
 
+  left_motor_group.move_velocity(50);
+  pros::delay(300);
+  left_motor_group.move_velocity(0);
+
+  pros::delay(1000);
+
+  matchloader.move_absolute(0, 200);
   intake.move_velocity(0);
 
-  right_motor_group.move_velocity(50);
-  pros::delay(500);
-  right_motor_group.move_velocity(0);
-  matchloader.move_absolute(0, 100);
+  drive_for_inches(80, 13);
 
-  drive_for_inches(80, 30);
+  left_motor_group.move_velocity(50);
+  pros::delay(200);
+  left_motor_group.move_velocity(0);
+
+  drive_for_inches(120, 10);  
+
 }
 
 void test() {
