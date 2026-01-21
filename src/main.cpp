@@ -482,7 +482,7 @@ void opcontrol() {
 
 void twovtwoNormalAuton() {
   // Move to lower center goal
-  matchloader.move_absolute(1400, 100);
+  matchloader.move_absolute(1400, 200);
   drive_for_inches(80, 24.4);
   pros::delay(500);
 
@@ -493,80 +493,73 @@ void twovtwoNormalAuton() {
   right_motor_group.move_velocity(0);
 
   intake.move_velocity(-200);
-  discore.move_absolute(800, 200);
+  discore.move_absolute(850, 200);
   drive_for_inches(90, 8);
   pros::delay(1100);
   
-  drive_backward_for_inches(60, 14);
-  matchloader.move_absolute(0, 200);
+  drive_for_inches(80, 1);
+  pros::delay(500);
 
+  drive_backward_for_inches(50, 14);
+
+  discore.move_absolute(0, 200);
   pros::delay(500);
 
   // shoot
   catapult_arm.move_absolute(-600, 200);
-  discore.move_absolute(0, 200);
   intake.move_velocity(-200);
+  pros::delay(1500);
+  catapult_arm.move_absolute(0, 200);
+
+
+  discore.move_absolute(850, 70);
+  pros::delay(500);
+  drive_for_inches(50, 14);
+  pros::delay(1200);
+
+  discore.move_absolute(0, 200);
+  catapult_arm.move_absolute(-600, 200);
+  intake.move_velocity(0);  
   pros::delay(1000);
-  catapult_arm.move_absolute(0, 40);
+  catapult_arm.move_absolute(0, 200);
 
+  intake.move_velocity(200);
   pros::delay(500);
-
-  catapult_arm.move_absolute(-600, 200);
-  discore.move_absolute(0, 200);
-  pros::delay(500);
-  catapult_arm.move_absolute(0, 40);
-
-  pros::delay(500);
-
-  catapult_arm.move_absolute(-600, 200);
-  discore.move_absolute(0, 200);
-  pros::delay(500);
-  catapult_arm.move_absolute(0, 40);
-
-  matchloader.move_absolute(1400,200);
-
-  discore.move_absolute(800, 200);
-  drive_for_inches(80, 14);
-
-  drive_backward_for_inches(80, 14);
-
-  // shoot
-  catapult_arm.move_absolute(-600, 200);
-  discore.move_absolute(0, 200);
-  intake.move_velocity(-200);
-  pros::delay(1000);
-  catapult_arm.move_absolute(0, 40);
-
-  pros::delay(500);
-
-  catapult_arm.move_absolute(-600, 200);
-  discore.move_absolute(0, 200);
-  pros::delay(500);
-  catapult_arm.move_absolute(0, 40);
-
-  pros::delay(500);
-
-  catapult_arm.move_absolute(-600, 200);
-  discore.move_absolute(0, 200);
-  pros::delay(500);
-  catapult_arm.move_absolute(0, 40);
-
-  left_motor_group.move_velocity(50);
-  pros::delay(300);
-  left_motor_group.move_velocity(0);
-
-  pros::delay(1000);
-
-  matchloader.move_absolute(0, 200);
   intake.move_velocity(0);
 
-  drive_for_inches(80, 13);
+  discore.move_absolute(850, 200);
+  intake.move_velocity(-200);
+  pros::delay(3000);
+  intake.move_velocity(0);
+
+  pros::delay(500);
+
+  drive_backward_for_inches(50, 13.5);
+
+  discore.move_absolute(0, 200);
+  pros::delay(500);
+
+  // shoot
+  catapult_arm.move_absolute(-600, 70);
+  intake.move_velocity(-200);
+  pros::delay(1500);
+  catapult_arm.move_absolute(0, 200);
+
+  pros::delay(500);
 
   left_motor_group.move_velocity(50);
-  pros::delay(200);
+  pros::delay(500);
   left_motor_group.move_velocity(0);
 
-  drive_for_inches(120, 10);  
+  pros::delay(500);
+
+  drive_for_inches(80, 1.8);
+
+  left_motor_group.move_velocity(-50);
+  pros::delay(500);
+  left_motor_group.move_velocity(0);
+
+  drive_backward_for_inches(40, 20);
 
 }
 
