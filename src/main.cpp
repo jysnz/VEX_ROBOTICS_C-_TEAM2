@@ -496,41 +496,37 @@ void twovtwoNormalAuton() {
   discore.move_absolute(850, 200);
   drive_for_inches(90, 8);
   pros::delay(1100);
-  
-  drive_for_inches(80, 1);
-  pros::delay(500);
 
-  drive_backward_for_inches(50, 14);
+  drive_backward_for_inches(50, 13.8);
 
   discore.move_absolute(0, 200);
   pros::delay(500);
 
   // shoot
+  intake.move_velocity(0);  
   catapult_arm.move_absolute(-600, 200);
-  intake.move_velocity(-200);
   pros::delay(1500);
   catapult_arm.move_absolute(0, 200);
 
-
   discore.move_absolute(850, 70);
   pros::delay(500);
+  intake.move_velocity(-200);
+
+  //Second matchload
   drive_for_inches(50, 14);
+  discore.move_absolute(0, 200);
   pros::delay(1200);
 
-  discore.move_absolute(0, 200);
   catapult_arm.move_absolute(-600, 200);
-  intake.move_velocity(0);  
   pros::delay(1000);
   catapult_arm.move_absolute(0, 200);
 
-  intake.move_velocity(200);
-  pros::delay(500);
-  intake.move_velocity(0);
+  // intake.move_velocity(200);
+  // pros::delay(500);
+  // intake.move_velocity(0);
 
   discore.move_absolute(850, 200);
-  intake.move_velocity(-200);
-  pros::delay(3000);
-  intake.move_velocity(0);
+  pros::delay(5000);
 
   pros::delay(500);
 
@@ -539,11 +535,12 @@ void twovtwoNormalAuton() {
   discore.move_absolute(0, 200);
   pros::delay(500);
 
-  // shoot
+  intake.move_velocity(0);  
   catapult_arm.move_absolute(-600, 70);
   intake.move_velocity(-200);
   pros::delay(1500);
   catapult_arm.move_absolute(0, 200);
+  intake.move_velocity(0);  
 
   pros::delay(500);
 
@@ -553,13 +550,109 @@ void twovtwoNormalAuton() {
 
   pros::delay(500);
 
-  drive_for_inches(80, 1.8);
+  drive_for_inches(80, 3);
 
   left_motor_group.move_velocity(-50);
   pros::delay(500);
   left_motor_group.move_velocity(0);
 
   drive_backward_for_inches(40, 20);
+}
+
+void skills(){
+  intake.move_velocity(-200);
+  discore.move_absolute(850, 200);
+  drive_for_inches(80, 31.5);
+
+  pros::delay(2000);
+
+  drive_backward_for_inches(80, 3);
+
+  pros::delay(400);
+
+  //Turn left
+  left_motor_group.move_velocity(-50);
+  right_motor_group.move_velocity(50);
+  pros::delay(380);
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  pros::delay(500);
+
+  drive_for_inches(80, 40);
+  intake.move_velocity(0);
+  pros::delay(500);
+  matchloader.move_absolute(1400, 200);
+
+  pros::delay(200);
+
+  //Turn left
+  left_motor_group.move_velocity(-50);
+  right_motor_group.move_velocity(50);
+  pros::delay(600);
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  pros::delay(500);
+
+  drive_for_inches(80, 2);
+
+  pros::delay(500);
+
+  //Turn right
+  left_motor_group.move_velocity(50);
+  right_motor_group.move_velocity(-50);
+  pros::delay(300);
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  drive_backward_for_inches(40, 3);
+
+  //shoot
+  discore.move_absolute(0, 200);
+  catapult_arm.move_absolute(-300, 200);
+  catapult_arm.move_absolute(-600, 40);
+  pros::delay(1500);
+  catapult_arm.move_absolute(0, 200);
+
+  pros::delay(500);
+
+  drive_for_inches(80, 9);
+  drive_for_inches(40, 4);
+
+  pros::delay(350);
+
+  intake.move_velocity(-200);
+  pros::delay(2500);
+  intake.move_velocity(0);
+
+  pros::delay(200);
+
+  drive_backward_for_inches(50, 14);
+
+  pros::delay(500);
+
+  //shoot
+  discore.move_absolute(0, 200);
+  catapult_arm.move_absolute(-300, 200);
+  catapult_arm.move_absolute(-600, 40);
+  pros::delay(1500);
+  catapult_arm.move_absolute(0, 200);
+
+  pros::delay(500);
+
+  drive_for_inches(60, 2);
+
+  // pros::delay(500);
+
+  // //Turn left
+  // left_motor_group.move_velocity(-50);
+  // right_motor_group.move_velocity(50);
+  // pros::delay(430);
+  // left_motor_group.move_velocity(0);
+  // right_motor_group.move_velocity(0);
+
+  // drive_for_inches(60, 14);
 
 }
 
@@ -580,16 +673,5 @@ void park() {
 }
 // --- Autonomous ---
 void autonomous() {
-  // drive_backward_for_inches(60, 15);
-  // shoot();
-  // pros::delay(3000);
-
-  // intake.move_velocity(0);
-  // left_motor_group.move_velocity(50);
-  // pros::delay(1000);
-  // left_motor_group.move_velocity(0);
-
-  // drive_for_inches(80, 25);
-
-  twovtwoNormalAuton();
+  skills();
 }
