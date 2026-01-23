@@ -127,6 +127,141 @@ double inchesToDegrees(double inches) {
   return rotations * 360.0; // degrees
 }
 
+bool drive_hit_wall() {
+  static int stoppedTime = 0;
+
+  const double VEL_THRESH = 5; // rpm
+  const int STOP_TIME_MS = 150;
+
+  double lv = std::abs(left_motor_group.get_actual_velocity());
+  double rv = std::abs(right_motor_group.get_actual_velocity());
+
+  if (lv < VEL_THRESH && rv < VEL_THRESH) {
+    stoppedTime += 10;
+    if (stoppedTime >= STOP_TIME_MS)
+      return true;
+  } else {
+    stoppedTime = 0;
+  }
+
+  return false;
+}
+
+bool drive_forward_nb_running = false;
+
+void drive_forward_nb_task(void *param) {
+  drive_forward_nb_running = true;
+
+  double *args = static_cast<double *>(param);
+  double maxSpeed = args[0];
+  double inches = args[1];
+
+  double targetDegrees = inchesToDegrees(inches);
+
+  left_motor_group.tare_position();
+  right_motor_group.tare_position();
+
+  const double accelRate = 2.0;
+  double currentSpeed = 0;
+
+  while (true) {
+    double leftPos = std::abs(left_motor_group.get_position());
+    double rightPos = std::abs(right_motor_group.get_position());
+    double avgPos = (leftPos + rightPos) / 2.0;
+
+    // 🧱 HIT WALL → STOP
+    if (drive_hit_wall())
+      break;
+
+    // 🎯 DISTANCE REACHED
+    if (avgPos >= targetDegrees - 2)
+      break;
+
+    // ACCEL ONLY
+    currentSpeed += accelRate;
+    if (currentSpeed > maxSpeed)
+      currentSpeed = maxSpeed;
+
+    left_motor_group.move_velocity(currentSpeed);
+    right_motor_group.move_velocity(currentSpeed);
+
+    pros::delay(10);
+  }
+
+  // HARD STOP
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  delete[] args;
+  drive_forward_nb_running = false;
+}
+
+void drive_for_inches_async_nonblocking(double maxSpeed, double inches) {
+  if (drive_forward_nb_running)
+    return;
+
+  double *args = new double[2]{maxSpeed, inches};
+  pros::Task(drive_forward_nb_task, args, "Drive Forward NB");
+}
+
+bool drive_backward_nb_running = false;
+
+void drive_backward_nb_task(void *param) {
+  drive_backward_nb_running = true;
+
+  double *args = static_cast<double *>(param);
+  double maxSpeed = args[0];
+  double inches = args[1];
+
+  double targetDegrees = inchesToDegrees(inches);
+
+  left_motor_group.tare_position();
+  right_motor_group.tare_position();
+
+  const double accelRate = 2.0;
+  double currentSpeed = 0;
+
+  while (true) {
+    double leftPos = std::abs(left_motor_group.get_position());
+    double rightPos = std::abs(right_motor_group.get_position());
+    double avgPos = (leftPos + rightPos) / 2.0;
+
+    // 🧱 HIT WALL → STOP
+    if (drive_hit_wall())
+      break;
+
+    // 🎯 DISTANCE REACHED
+    if (avgPos >= targetDegrees - 2)
+      break;
+
+    // ACCEL ONLY
+    currentSpeed += accelRate;
+    if (currentSpeed > maxSpeed)
+      currentSpeed = maxSpeed;
+
+    left_motor_group.move_velocity(-currentSpeed);
+    right_motor_group.move_velocity(-currentSpeed);
+
+    pros::delay(10);
+  }
+
+  // HARD STOP
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  delete[] args;
+  drive_backward_nb_running = false;
+}
+
+void drive_backward_for_inches_async_nonblocking(double maxSpeed,
+                                                 double inches) {
+  if (drive_backward_nb_running)
+    return;
+
+  double *args = new double[2]{maxSpeed, inches};
+  pros::Task(drive_backward_nb_task, args, "Drive Backward NB");
+}
+
 void distance_record_task(void *) {
   while (true) {
     if (recordingActive) {
@@ -637,34 +772,50 @@ void skills() {
 
   pros::delay(500);
 
-  drive_for_inches(80, 40);
+  drive_for_inches(80, 49);
   intake.move_velocity(0);
   pros::delay(500);
-  matchloader.move_absolute(1400, 200);
 
-  pros::delay(200);
+  // Turn right to reset
+  left_motor_group.move_velocity(100);
+  right_motor_group.move_velocity(-100);
+  pros::delay(400);
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  drive_backward_for_inches(80, 1);
+
+  // Turn right to reset
+  left_motor_group.move_velocity(50);
+  right_motor_group.move_velocity(-50);
+  pros::delay(500);
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+
+  pros::delay(500);
+
+  drive_for_inches_async_nonblocking(80, 5);
+
+  pros::delay(750);
+
+  drive_backward_for_inches(80, 3.5);
+
+  pros::delay(500);
 
   // Turn left
   left_motor_group.move_velocity(-50);
   right_motor_group.move_velocity(50);
-  pros::delay(600);
+  pros::delay(460);
   left_motor_group.move_velocity(0);
   right_motor_group.move_velocity(0);
 
   pros::delay(500);
 
-  drive_for_inches(80, 2.3);
+  drive_backward_for_inches(60, 3);
+
+  drive_backward_for_inches_async_nonblocking(100, 5);
 
   pros::delay(500);
-
-  // Turn right
-  left_motor_group.move_velocity(50);
-  right_motor_group.move_velocity(-50);
-  pros::delay(300);
-  left_motor_group.move_velocity(0);
-  right_motor_group.move_velocity(0);
-
-  drive_backward_for_inches(40, 3);
 
   // shoot
   discore.move_absolute(0, 200);
@@ -672,16 +823,17 @@ void skills() {
   catapult_arm.move_absolute(-600, 40);
   pros::delay(1500);
   catapult_arm.move_absolute(0, 200);
+  matchloader.move_absolute(1400, 200);
 
   pros::delay(500);
 
   drive_for_inches(50, 3);
-  drive_backward_for_inches(100, 3);
+  drive_backward_for_inches_async_nonblocking(100, 7);
 
   pros::delay(500);
 
   drive_for_inches(70, 9);
-  drive_for_inches_async(40, 4, 1200);
+  drive_for_inches_async_nonblocking(40, 6);
 
   intake.move_velocity(-200);
   pros::delay(2500);
