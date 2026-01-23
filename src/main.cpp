@@ -10,7 +10,10 @@
 #include <algorithm>
 #include <cmath>
 
-std::vector<double> recordedPaths;   // Stores inches
+bool drive_task_running = false;
+bool drive_backward_task_running = false;
+
+std::vector<double> recordedPaths; // Stores inches
 bool recordingActive = false;
 double liveInches = 0;
 
@@ -89,7 +92,6 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
 double prevLeft = 0.0;
 double prevRight = 0.0;
 
-
 // --- Helper functions ---
 float ticksToInches(float ticks) {
   return (ticks / ticksPerRev) * PI * wheelDiameter;
@@ -159,7 +161,7 @@ void stop_distance_recording() {
   pros::lcd::print(0, "Saved: %.2f in", liveInches);
 }
 
-void distanceTuning(){
+void distanceTuning() {
   while (true) {
     if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
       start_distance_recording();
@@ -301,6 +303,64 @@ void drive_backward_for_inches(double maxSpeed, double inches) {
   right_motor_group.move_velocity(0);
 }
 
+void drive_backward_task_fn(void *param) {
+  drive_backward_task_running = true;
+
+  double *args = static_cast<double *>(param);
+  double maxSpeed = args[0];
+  double inches = args[1];
+  int delayMs = static_cast<int>(args[2]);
+
+  drive_backward_for_inches(maxSpeed, inches);
+
+  // ✅ DELAY BEFORE NEXT MOVEMENT IS ALLOWED
+  pros::delay(delayMs);
+
+  delete[] args;
+  drive_backward_task_running = false;
+}
+
+void drive_backward_inches_async(double maxSpeed, double inches, int delayMs) {
+  if (drive_backward_task_running)
+    return;
+
+  double *args = new double[3];
+  args[0] = maxSpeed;
+  args[1] = inches;
+  args[2] = static_cast<double>(delayMs);
+
+  pros::Task driveBackwardTask(drive_backward_task_fn, args,
+                               "Drive Backward Task");
+}
+
+void drive_task_fn(void *param) {
+  drive_task_running = true;
+
+  double *args = static_cast<double *>(param);
+  double maxSpeed = args[0];
+  double inches = args[1];
+  int delayMs = static_cast<int>(args[2]);
+
+  drive_for_inches(maxSpeed, inches);
+
+  // ✅ DELAY BEFORE NEXT MOVEMENT IS ALLOWED
+  pros::delay(delayMs);
+
+  delete[] args;
+  drive_task_running = false;
+}
+
+void drive_for_inches_async(double maxSpeed, double inches, int delayMs) {
+  if (drive_task_running)
+    return; // 🚫 block second start
+
+  double *args = new double[3];
+  args[0] = maxSpeed;
+  args[1] = inches;
+  args[2] = static_cast<double>(delayMs);
+
+  pros::Task driveTask(drive_task_fn, args, "Drive Task");
+}
 
 void shoot() {
   catapult_arm.move_absolute(-600, 70);
@@ -309,10 +369,11 @@ void shoot() {
   pros::delay(300);
   intake.move_velocity(0);
   catapult_arm.move_absolute(0, 40);
+  pros::delay(800);
   discore.move_absolute(800, 200);
 }
 
-void catapultControl(){
+void catapultControl() {
   const int MAX_SPEED = 127;
   static bool controlsReversed = false;
   while (true) {
@@ -364,10 +425,10 @@ void catapultControl(){
     } else if (discoreUp)
       discore.move_absolute(800, 200);
 
-    if (matchLoadUp && !matchLoadDown){
+    if (matchLoadUp && !matchLoadDown) {
       matchloader.move_absolute(0, 100);
       discore.move_absolute(800, 200);
-    }else if (matchLoadDown && !matchLoadUp){
+    } else if (matchLoadDown && !matchLoadUp) {
       matchloader.move_absolute(1400, 100);
       discore.move_absolute(0, 200);
     }
@@ -476,9 +537,7 @@ void initialize() {
 }
 
 // --- Operator Control ---
-void opcontrol() {
-  catapultControl();
-}
+void opcontrol() { catapultControl(); }
 
 void twovtwoNormalAuton() {
   // Move to lower center goal
@@ -503,7 +562,7 @@ void twovtwoNormalAuton() {
   pros::delay(500);
 
   // shoot
-  intake.move_velocity(0);  
+  intake.move_velocity(0);
   catapult_arm.move_absolute(-600, 200);
   pros::delay(1500);
   catapult_arm.move_absolute(0, 200);
@@ -512,7 +571,7 @@ void twovtwoNormalAuton() {
   pros::delay(500);
   intake.move_velocity(-200);
 
-  //Second matchload
+  // Second matchload
   drive_for_inches(50, 14);
   discore.move_absolute(0, 200);
   pros::delay(1200);
@@ -535,12 +594,12 @@ void twovtwoNormalAuton() {
   discore.move_absolute(0, 200);
   pros::delay(500);
 
-  intake.move_velocity(0);  
+  intake.move_velocity(0);
   catapult_arm.move_absolute(-600, 70);
   intake.move_velocity(-200);
   pros::delay(1500);
   catapult_arm.move_absolute(0, 200);
-  intake.move_velocity(0);  
+  intake.move_velocity(0);
 
   pros::delay(500);
 
@@ -559,7 +618,7 @@ void twovtwoNormalAuton() {
   drive_backward_for_inches(40, 20);
 }
 
-void skills(){
+void skills() {
   intake.move_velocity(-200);
   discore.move_absolute(850, 200);
   drive_for_inches(80, 31.5);
@@ -567,10 +626,9 @@ void skills(){
   pros::delay(2000);
 
   drive_backward_for_inches(80, 3);
-
   pros::delay(400);
 
-  //Turn left
+  // Turn left
   left_motor_group.move_velocity(-50);
   right_motor_group.move_velocity(50);
   pros::delay(380);
@@ -586,7 +644,7 @@ void skills(){
 
   pros::delay(200);
 
-  //Turn left
+  // Turn left
   left_motor_group.move_velocity(-50);
   right_motor_group.move_velocity(50);
   pros::delay(600);
@@ -595,11 +653,11 @@ void skills(){
 
   pros::delay(500);
 
-  drive_for_inches(80, 2);
+  drive_for_inches(80, 2.3);
 
   pros::delay(500);
 
-  //Turn right
+  // Turn right
   left_motor_group.move_velocity(50);
   right_motor_group.move_velocity(-50);
   pros::delay(300);
@@ -608,7 +666,7 @@ void skills(){
 
   drive_backward_for_inches(40, 3);
 
-  //shoot
+  // shoot
   discore.move_absolute(0, 200);
   catapult_arm.move_absolute(-300, 200);
   catapult_arm.move_absolute(-600, 40);
@@ -617,10 +675,13 @@ void skills(){
 
   pros::delay(500);
 
-  drive_for_inches(80, 9);
-  drive_for_inches(40, 4);
+  drive_for_inches(50, 3);
+  drive_backward_for_inches(100, 3);
 
-  pros::delay(350);
+  pros::delay(500);
+
+  drive_for_inches(70, 9);
+  drive_for_inches_async(40, 4, 1200);
 
   intake.move_velocity(-200);
   pros::delay(2500);
@@ -632,7 +693,7 @@ void skills(){
 
   pros::delay(500);
 
-  //shoot
+  // shoot
   discore.move_absolute(0, 200);
   catapult_arm.move_absolute(-300, 200);
   catapult_arm.move_absolute(-600, 40);
@@ -653,7 +714,6 @@ void skills(){
   // right_motor_group.move_velocity(0);
 
   // drive_for_inches(60, 14);
-
 }
 
 void test() {
@@ -672,6 +732,4 @@ void park() {
   pros::delay(7000);
 }
 // --- Autonomous ---
-void autonomous() {
-  skills();
-}
+void autonomous() { skills(); }
