@@ -20,8 +20,13 @@ double liveInches = 0;
 enum CatapultState { CATA_IDLE, CATA_MOVING };
 
 CatapultState catapultState = CATA_IDLE;
+
+int catapultSpeed = 200; // Max velocity for firing
 bool catapultReversed = false;
-int catapultSpeed = 0;
+
+// Define encoder positions for endpoints (adjust to your arm)
+int minPos = 0;   // fully retracted
+int maxPos = 360; // fully extended
 
 // --- Robot state ---
 double x = 0.0, y = 0.0, theta = 0.0, heading = 0.0;
@@ -101,8 +106,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller,
 double prevLeft = 0.0;
 double prevRight = 0.0;
 
+double sign(double x) { return (x > 0) - (x < 0); }
+
 bool catapult_at_endpoint() {
-  return std::abs(catapult_arm.get_actual_velocity()) < 2;
+  int pos = catapult_arm.get_position();
+  return catapultReversed ? pos <= minPos : pos >= maxPos;
 }
 
 void catapult_start(int speed, bool reversed = false) {
@@ -112,22 +120,65 @@ void catapult_start(int speed, bool reversed = false) {
   catapultReversed = reversed;
   catapultSpeed = speed;
 
-  int dir = reversed ? -1 : 1;
-  catapult_arm.move_velocity(dir * speed);
-
   catapultState = CATA_MOVING;
 }
 
 void catapult_task(void *) {
   while (true) {
     if (catapultState == CATA_MOVING) {
-      if (catapult_at_endpoint()) {
+      int pos = catapult_arm.get_position();
+      int target = catapultReversed ? minPos : maxPos;
+      int distance = std::abs(target - pos);
+
+      // Smooth deceleration
+      int rampThreshold = 40; // last 40 encoder units
+      int speed = catapultSpeed;
+
+      if (distance < rampThreshold) {
+        speed = (catapultSpeed * distance) / rampThreshold;
+        if (speed < 50)
+          speed = 50; // minimum speed to still move
+      }
+
+      int dir = catapultReversed ? -1 : 1;
+      catapult_arm.move_velocity(dir * speed);
+
+      // Stop completely when very close
+      if (distance <= 2) {
         catapult_arm.move_velocity(0);
         catapultState = CATA_IDLE;
       }
     }
+
     pros::delay(10);
   }
+}
+
+void catapult_manual(int input) {
+  // input: -200 to 200
+  catapult_arm.move_velocity(input);
+  catapultState = CATA_IDLE; // manual cancels task
+}
+
+void catapult_home() {
+  // Move backward slowly until endpoint (encoder-based)
+  catapultReversed = true;
+  catapult_arm.move_velocity(100); // slow pullback
+
+  while (catapult_arm.get_position() > minPos) {
+    pros::delay(10);
+  }
+
+  // Stop motor
+  catapult_arm.move_velocity(0);
+
+  // Reset encoder to starting position
+  catapult_arm.tare_position();
+  catapult_arm.move_velocity(0);
+
+  // Now the catapult is at starting position
+  catapultState = CATA_IDLE;
+  catapultReversed = false;
 }
 
 // --- Helper functions ---
@@ -193,6 +244,34 @@ void turn_right_deg(double degrees, int speed, double delay) {
 
   left_motor_group.move_velocity(0);
   right_motor_group.move_velocity(0);
+
+  pros::delay(delay);
+}
+
+void turn_left_deg_vol(double degrees, int voltage, double delay) {
+  int timeMs = turn_deg_to_ms(degrees);
+
+  left_motor_group.move_voltage(-voltage);
+  right_motor_group.move_voltage(voltage);
+
+  pros::delay(timeMs);
+
+  left_motor_group.move_voltage(0);
+  right_motor_group.move_voltage(0);
+
+  pros::delay(delay);
+}
+
+void turn_right_deg_vol(double degrees, int voltage, double delay) {
+  int timeMs = turn_deg_to_ms(degrees);
+
+  left_motor_group.move_voltage(voltage);
+  right_motor_group.move_voltage(-voltage);
+
+  pros::delay(timeMs);
+
+  left_motor_group.move_voltage(0);
+  right_motor_group.move_voltage(0);
 
   pros::delay(delay);
 }
@@ -330,54 +409,6 @@ void drive_backward_for_inches_async_nonblocking(double maxSpeed,
 
   double *args = new double[2]{maxSpeed, inches};
   pros::Task(drive_backward_nb_task, args, "Drive Backward NB");
-}
-
-void distance_record_task(void *) {
-  while (true) {
-    if (recordingActive) {
-      double leftDeg = left_motor_group.get_position();
-      double rightDeg = right_motor_group.get_position();
-
-      double avgDeg = (leftDeg + rightDeg) / 2.0;
-      liveInches = inchesToDegrees(avgDeg);
-
-      // LCD feedback
-      pros::lcd::print(1, "Distance: %.2f in", liveInches);
-    }
-
-    pros::delay(20);
-  }
-}
-
-void start_distance_recording() {
-  left_motor_group.tare_position();
-  right_motor_group.tare_position();
-
-  liveInches = 0;
-  recordingActive = true;
-
-  pros::lcd::print(0, "Recording...");
-}
-
-void stop_distance_recording() {
-  recordingActive = false;
-  recordedPaths.push_back(liveInches);
-
-  pros::lcd::print(0, "Saved: %.2f in", liveInches);
-}
-
-void distanceTuning() {
-  while (true) {
-    if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
-      start_distance_recording();
-    }
-
-    if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
-      stop_distance_recording();
-    }
-
-    pros::delay(10);
-  }
 }
 
 void drive_for_inches(double maxSpeed, double inches) {
@@ -576,6 +607,113 @@ void shoot() {
   catapult_arm.move_absolute(0, 40);
 }
 
+void drive_for_inches_voltage(double maxVoltage, double inches) {
+  double targetDegrees = inchesToDegrees(std::abs(inches));
+  double direction = sign(inches);
+
+  left_motor_group.tare_position();
+  right_motor_group.tare_position();
+
+  const double accelStep = 300;   // voltage per 10ms
+  const double decelStart = 0.6;
+  const double minVoltage = 1200; // prevents stall
+
+  double currentVoltage = 0;
+  double decelPoint = targetDegrees * decelStart;
+
+  while (true) {
+    double leftPos = std::abs(left_motor_group.get_position());
+    double rightPos = std::abs(right_motor_group.get_position());
+    double avgPos = (leftPos + rightPos) / 2.0;
+
+    // ACCELERATION
+    if (avgPos < decelPoint) {
+      currentVoltage += accelStep;
+      if (currentVoltage > maxVoltage)
+        currentVoltage = maxVoltage;
+    }
+    // DECELERATION
+    else {
+      double remaining = targetDegrees - avgPos;
+      currentVoltage =
+          maxVoltage * (remaining / (targetDegrees - decelPoint));
+      if (currentVoltage < minVoltage)
+        currentVoltage = minVoltage;
+    }
+
+    // END CONDITION (early stop like your velocity code)
+    if (avgPos >= targetDegrees - 2)
+      break;
+
+    left_motor_group.move_voltage(currentVoltage * direction);
+    right_motor_group.move_voltage(currentVoltage * direction);
+
+    pros::delay(10);
+  }
+
+  // ----- SMOOTH FINAL STOP -----
+  double lastVoltage = std::max(currentVoltage, minVoltage);
+  while (lastVoltage > 0) {
+    left_motor_group.move_voltage(lastVoltage * direction);
+    right_motor_group.move_voltage(lastVoltage * direction);
+    lastVoltage -= 200; // small ramp-down
+    if (lastVoltage < 0)
+      lastVoltage = 0;
+    pros::delay(10);
+  }
+
+  // Hard stop
+  left_motor_group.move_voltage(0);
+  right_motor_group.move_voltage(0);
+}
+
+
+void drive_for_inches_voltage_simple(double maxVoltage, double inches) {
+  double targetDegrees = inchesToDegrees(std::abs(inches));
+  double direction = sign(inches);
+
+  left_motor_group.tare_position();
+  right_motor_group.tare_position();
+
+  const double accelStep = 400;
+  const double minVoltage = 1200;
+
+  double currentVoltage = 0;
+
+  while (true) {
+    double leftPos = std::abs(left_motor_group.get_position());
+    double rightPos = std::abs(right_motor_group.get_position());
+    double avgPos = (leftPos + rightPos) / 2.0;
+
+    if (avgPos >= targetDegrees - 2)
+      break;
+
+    currentVoltage += accelStep;
+    if (currentVoltage > maxVoltage)
+      currentVoltage = maxVoltage;
+
+    left_motor_group.move_voltage(currentVoltage * direction);
+    right_motor_group.move_voltage(currentVoltage * direction);
+
+    pros::delay(10);
+  }
+
+  // ----- SMOOTH FINAL STOP -----
+  double lastVoltage = std::max(currentVoltage, minVoltage);
+  while (lastVoltage > 0) {
+    left_motor_group.move_voltage(lastVoltage * direction);
+    right_motor_group.move_voltage(lastVoltage * direction);
+    lastVoltage -= 200;
+    if (lastVoltage < 0)
+      lastVoltage = 0;
+    pros::delay(10);
+  }
+
+  left_motor_group.move_voltage(0);
+  right_motor_group.move_voltage(0);
+}
+
+
 void catapultControl() {
   const int MAX_SPEED = 127;
   static bool controlsReversed = false;
@@ -669,16 +807,46 @@ void wall_reset(int voltage = 8000, int settleTime = 200) {
   pros::delay(50);
 }
 
+void wall_reset_v2(int voltage = 8000, int settleTime = 200, int direction = 1,
+                   int timeout = 1000) {
+  // direction:  1 = forward
+  //            -1 = backward
+
+  voltage = std::abs(voltage) * direction;
+
+  left_motor_group.move_voltage(voltage);
+  right_motor_group.move_voltage(voltage);
+
+  int stalledTime = 0;
+  int elapsed = 0;
+
+  while (stalledTime < settleTime && elapsed < timeout) {
+    double lv = std::abs(left_motor_group.get_actual_velocity());
+    double rv = std::abs(right_motor_group.get_actual_velocity());
+
+    if (lv < 3 && rv < 3) {
+      stalledTime += 10;
+    } else {
+      stalledTime = 0;
+    }
+
+    pros::delay(10);
+    elapsed += 10;
+  }
+
+  left_motor_group.move_voltage(0);
+  right_motor_group.move_voltage(0);
+
+  pros::delay(50);
+}
+
 // --- Initialize ---
 void initialize() {
-  catapult_start(200, true); // reset
   pros::lcd::initialize();
   chassis.calibrate();
   setPose(0, 0, 0);
   start_odom();
   matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  static pros::Task catapultTask(catapult_task);
-  pros::Task recordTask(distance_record_task);
 
   static pros::Task odoTask(odometryTask);
 
@@ -847,68 +1015,58 @@ void twovtwoNormalAuton() {
 
 void skillsV2() {
   // Reset the catapult
-  catapult_start(200, true); // reset
+  // catapult_home();
 
   // Intake two balls
   intake.move_velocity(-200);
   discore.move_absolute(850, 200);
-  drive_for_inches(80, 31.5);
-
-  pros::delay(2000);
-
+  drive_for_inches(120, 29);
+  wall_reset_v2(7000);
   drive_backward_for_inches(80, 1.5);
-  pros::delay(400);
 
   turn_left_deg(60, 50, 500);
 
-  // Go to the other side
-  drive_for_inches(80, 36);
-  pros::delay(500);
+  drive_for_inches(120, 38);
 
   // Throw away the red balls
   matchloader.move_absolute(1400, 200);
   pros::delay(350);
-  drive_for_inches(80, 3);
-  pros::delay(1200);
+  drive_for_inches(80, 2);
   intake.move_velocity(0);
-  matchloader.move_absolute(0, 200);
-  pros::delay(200);
 
   // Turn to wall
-  turn_right_deg(150, 100, 500);
-  pros::delay(250);
-  drive_backward_for_inches(80, 2);
-  pros::delay(500);
-  turn_right_deg(55, 50, 250);
+  turn_right_deg(150, 90, 500);
+  drive_backward_for_inches(80, 3);
+  matchloader.move_absolute(0, 200);
+  turn_right_deg(30, 50, 250);
 
   // Wall reset
   wall_reset();
 
   // Drive backwards for turn
   drive_backward_for_inches(40, 7.4);
-  pros::delay(500);
+  pros::delay(250);
 
-  // // // Turn to face the long goal
+  // Turn to face the long goal
   turn_left_deg(120, 30, 500);
 
   // // Drive backward to long goal
-  drive_backward_for_inches(60, 3);
-  pros::delay(350);
-  drive_backward_for_inches_async_nonblocking(100, 5.5);
+  drive_backward_for_inches(50, 13);
+  drive_backward_for_inches_async_nonblocking(80, 6);
   pros::delay(500);
 
   // Shoot
   discore.move_absolute(0, 200);
-  catapult_arm.move_absolute(-300, 200);
-  catapult_arm.move_absolute(-600, 40);
-  pros::delay(1500);
-  catapult_arm.move_absolute(600, 200);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
   matchloader.move_absolute(1400, 200);
 
+  pros::delay(250);
+
   // Align the robot to the long goal
-  pros::delay(500); // 1st alignment
   drive_for_inches(50, 2);
-  pros::delay(350);
   drive_backward_for_inches_async_nonblocking(80, 4);
   pros::delay(500);
 
@@ -922,53 +1080,53 @@ void skillsV2() {
   discore.move_absolute(800, 200);
   intake.move_velocity(-200);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
+  wall_reset_v2(6000, 1000);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
+  wall_reset_v2(6000, 1000);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
+  wall_reset_v2(6000, 1000);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
-  pros::delay(2500);
+  wall_reset_v2(6000, 1000);
+  drive_backward_for_inches(40, 0.5);
+  wall_reset_v2(6000, 1000);
 
   // Shoot the gathered balls
   pros::delay(500);
   drive_backward_for_inches(50, 13);
-  pros::delay(500);
   drive_backward_for_inches_async_nonblocking(80, 6);
   pros::delay(1000);
 
   discore.move_absolute(0, 200);
-  catapult_arm.move_absolute(-600, 100);
-  pros::delay(1500);
-  catapult_arm.move_absolute(600, 100);
-  pros::delay(250);
-  catapult_arm.move_absolute(-600, 100);
-  pros::delay(1500);
-  catapult_arm.move_absolute(600, 100);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
   intake.move_velocity(0);
 
-  // 2nd part
   pros::delay(500);
-  drive_for_inches(40, 3);
-  discore.move_absolute(700, 200);
-  pros::delay(250);
-  turn_left_deg(129, 30, 500);
-  pros::delay(500);
-  drive_for_inches(80, 48.5);
+
+  //2nd half
+  drive_for_inches(100, 3);
+  turn_right_deg(90, 40, 500);
+  wall_reset_v2();
+
+  drive_backward_for_inches(80, 53);
 
   // Turn to face the matchload
-  turn_right_deg(125, 30, 500);
+  turn_left_deg(125, 30, 500);
   pros::delay(500);
   drive_backward_for_inches_async_nonblocking(80, 8);
   drive_for_inches(80, 5);
-  drive_backward_for_inches_async_nonblocking(100, 8);
+  drive_backward_for_inches_async_nonblocking(100, 12);
 
   pros::delay(250);
 
   // Gather matchload
-  drive_for_inches(40, 9);
-  wall_reset(4000);
+  drive_for_inches(40, 9.8);
   drive_backward_for_inches(40, 0.5);
   drive_for_inches(40, 0.5);
   pros::delay(350);
@@ -977,29 +1135,46 @@ void skillsV2() {
   discore.move_absolute(800, 200);
   intake.move_velocity(-200);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
+  wall_reset_v2(6000, 100);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
+  wall_reset_v2(6000, 100);
   drive_backward_for_inches(40, 0.5);
-  drive_for_inches(40, 0.5);
-  pros::delay(2500);
+  wall_reset_v2(6000, 100);
+  drive_backward_for_inches(40, 0.3);
+  wall_reset_v2(6000, 100);
+  drive_backward_for_inches(40, 0.3);
+  wall_reset_v2(6000, 1000);
 
-  // Shoot the gathered balls
+   // Shoot the gathered balls
   pros::delay(500);
-  drive_backward_for_inches(40, 13);
-  pros::delay(500);
+  drive_backward_for_inches(50, 13);
   drive_backward_for_inches_async_nonblocking(80, 6);
   pros::delay(1000);
 
   discore.move_absolute(0, 200);
-  catapult_arm.move_absolute(-600, 100);
-  pros::delay(1500);
-  catapult_arm.move_absolute(600, 100);
-  pros::delay(250);
-  catapult_arm.move_absolute(-600, 100);
-  pros::delay(1500);
-  catapult_arm.move_absolute(600, 100);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
+  shoot();
+  catapult_arm.move_absolute(0, 40);
   intake.move_velocity(0);
+
+  //Park
+  drive_for_inches(100, 3);
+
+  matchloader.move_absolute(0, 200);
+
+  turn_left_deg(90, 80, 500);
+
+  drive_for_inches(120, 38);
+  turn_left_deg(60, 70, 500);
+
+  drive_for_inches(50, 10);
+  drive_for_inches(120, 15);
+
 }
 
 void skills() {
@@ -1222,3 +1397,20 @@ void park() {
 }
 // --- Autonomous ---
 void autonomous() { skillsV2(); }
+
+// // Forward fire
+// catapult_start(200, false);
+// while (catapultState != CATA_IDLE) pros::delay(10);
+
+// // Reverse fire
+// catapult_start(200, true);
+// while (catapultState != CATA_IDLE) pros::delay(10);
+
+// Driver's control catapult function
+//  int speedInput = 0;
+//  if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1))
+//      speedInput = 200;   // fire forward
+//  if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
+//      speedInput = -200;  // pull back / reverse
+
+// catapult_manual(speedInput);
