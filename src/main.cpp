@@ -731,6 +731,65 @@ void wall_reset(int voltage = 8000, int settleTime = 200) {
   pros::delay(50);
 }
 
+void catapultShoot() {
+  const int LOAD_POS = 0;
+  const int FIRE_POS = -600;
+  const int SPEED = 200;
+
+  const int STALL_TIME = 250;
+  const int CHECK_DELAY = 10;
+  const int MAX_ATTEMPTS = 10;
+
+  for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+
+    bool shotSuccess = false;
+
+    // ---- FIRE ----
+    catapult_arm.move_absolute(FIRE_POS, SPEED);
+
+    int stalledTime = 0;
+
+    while (true) {
+      pros::delay(CHECK_DELAY);
+
+      double pos = catapult_arm.get_position();
+      double vel = std::abs(catapult_arm.get_actual_velocity());
+
+      // ✅ Successful fire
+      if (pos <= FIRE_POS + 25) {
+        shotSuccess = true;
+        break;
+      }
+
+      // ❌ Jam detection
+      if (vel < 5)
+        stalledTime += CHECK_DELAY;
+      else
+        stalledTime = 0;
+
+      if (stalledTime >= STALL_TIME)
+        break;
+    }
+
+    // ---- RESET / RELOAD ----
+    catapult_arm.move_absolute(LOAD_POS, SPEED);
+
+    while (std::abs(catapult_arm.get_position() - LOAD_POS) > 10) {
+      pros::delay(10);
+    }
+
+    // ✅ If shot worked, we are done
+    if (shotSuccess)
+      return;
+
+    // ❌ Otherwise: loop repeats → retry fire
+  }
+
+  // Failsafe
+  catapult_arm.move_velocity(0);
+}
+
+
 void wall_reset_v2(int voltage = 8000, int settleTime = 200, int direction = 1,
                    int timeout = 1000) {
   // direction:  1 = forward
@@ -835,7 +894,7 @@ void catapultControl() {
     right_motor_group.move(rightMotorSpeed);
 
     if (catapultArm) {
-      shoot();
+      catapultShoot();
     }
 
     if (discoreDown) {
@@ -861,6 +920,7 @@ void catapultControl() {
     pros::delay(20);
   }
 }
+
 
 // --- Initialize ---
 void initialize() {
@@ -1000,13 +1060,14 @@ void twoVtwo(){
   // Shoot
   discore.move_absolute(0, 200);
   pros::delay(500);
-  catapult_arm.move_absolute(-400, 400);
-  catapult_arm.move_absolute(-600, 70);
+  catapult_arm.move_absolute(-600, 400);
   pros::delay(500);
-  catapult_arm.move_absolute(0, 200);
+  catapult_arm.move_absolute(0, 400);
   pros::delay(500);
-  matchloader.move_absolute(1400, 200);
-
+  catapult_arm.move_absolute(-600, 400);
+  pros::delay(500);
+  catapult_arm.move_absolute(0, 400);
+  matchloader.move_absolute(0, 200);
   pros::delay(250);
 
   //Long goal reset
@@ -1015,13 +1076,23 @@ void twoVtwo(){
   drive_for_inches(80, 2);
   wall_reset_v2(8000, 200, -1);
 
-  drive_for_inches(80, 2);
-  turn_left_deg(70, 40, 500);
-  drive_backward_for_inches(80,3);
+  pros::delay(500);
+
+  // Descore
+  drive_for_inches(50, 2);
+  pros::delay(500);
+  turn_left_deg(57, 40, 500);
+  drive_backward_for_inches(50,2.9);
   pros::delay(250);
-  turn_right_deg(80, 30, 500);
-  drive_backward_for_inches(40, 7);
+  
+  right_motor_group.move_velocity(-50);
+  pros::delay(750);
+  right_motor_group.move_velocity(0);
+
+  drive_backward_for_inches(100,6);
   discore.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+  
+
 
 }
 void skillsV3() {
@@ -1030,65 +1101,91 @@ void skillsV3() {
   discore.tare_position();
   // // Intake two balls
   intake.move_velocity(-200);
-  // discore.move_absolute(850, 200);
-  // drive_for_inches(80, 29);
-  // wall_reset_v2(7000);
-  // drive_backward_for_inches(80, 6);
-  // turn_right_deg(120, 30, 500);
-  // pros::delay(500);
+  discore.move_absolute(850, 200);
+  drive_for_inches(80, 29);
+  wall_reset_v2(7000);
+  drive_backward_for_inches(80, 6);
+  turn_right_deg(120, 30, 500);
+  pros::delay(500);
 
-  // wall_reset_v2(7000, 200, -1);
-  // pros::delay(500);
+  //Long goal reset
+  wall_reset_v2(7000, 200, -1);
+  pros::delay(500);
 
-  // discore.move_absolute(0, 200);
-  // catapult_arm.move_absolute(-250, 400);
-  // catapult_arm.move_absolute(-500, 70);
-  // pros::delay(500);
+  //Shoot
+  discore.move_absolute(0, 200);
+  // catapult_arm.move_absolute(-300, 200);
+  // catapult_arm.move_absolute(-600, 200);
+  // pros::delay(1000);
   // catapult_arm.move_absolute(0, 200);
-  // pros::delay(500);
+  // catapult_arm.move_absolute(-300, 200);
+  // catapult_arm.move_absolute(-600, 200);
+  // pros::delay(1000);
+  // catapult_arm.move_absolute(0, 200);
+  catapultShoot();
+  pros::delay(500);
 
-  // matchloader.move_absolute(1400, 200);
+  matchloader.move_absolute(1400, 200);
 
-  drive_for_inches(80, 3);
-  wall_reset_v2(8000, 200, -1);
+  //Long goal reset
+  wall_reset_v2(7000, 200, -1); //Wall reset Direction = -1 (Backward), Direction = 1 (Forward)
+  pros::delay(500);
+
+  //Long goal reset
   drive_for_inches(80, 3);
   wall_reset_v2(10000, 200, -1);
   pros::delay(500);
-  drive_for_inches(50, 16);
-  // pros::delay(350);
-  // drive_backward_for_inches(80, .5);
-  // wall_reset_v2(4000);
-  // drive_backward_for_inches(80, .5);
-  // wall_reset_v2(4000);
-  // drive_backward_for_inches(80, .5);
-  // wall_reset_v2(4000);
-  // drive_backward_for_inches(80, .5);
-  // wall_reset_v2(4000);
 
-  pros::delay(500);
+  //Gather matchload
+  drive_for_inches(50, 14);
+  pros::delay(350);
+  drive_backward_for_inches(80, .5); //Backward drive
+  wall_reset_v2(4000);
+  drive_backward_for_inches(80, .5); //Backward drive
+  wall_reset_v2(4000);
+  drive_backward_for_inches(80, .5); //Backward drive
+  wall_reset_v2(4000);
+  drive_backward_for_inches(80, .5); //Backward drive
+  wall_reset_v2(4000);
+  drive_backward_for_inches(80, .5); //Backward drive
+  wall_reset_v2(4000);
+  drive_backward_for_inches(80, .5); //Backward drive
+  wall_reset_v2(4000, 200);
 
+  //Drive back to long goal
   drive_backward_for_inches(40, 10);
-  wall_reset_v2(8000, 200, -1);
-  drive_for_inches(80, 3);
+  turn_left_deg(10, 50, 250);
   wall_reset_v2(8000, 200, -1);
   pros::delay(500);
 
   // Shoot
   discore.move_absolute(0, 200);
   pros::delay(500);
-  catapult_arm.move_absolute(-250, 400);
-  catapult_arm.move_absolute(-500, 70);
-  pros::delay(500);
-  catapult_arm.move_absolute(0, 200);
-  pros::delay(500);
-  catapult_arm.move_absolute(-250, 400);
-  catapult_arm.move_absolute(-500, 70);
-  pros::delay(500);
-  catapult_arm.move_absolute(0, 200);
-  pros::delay(500);
-  matchloader.move_absolute(1400, 200);
-
+  // catapult_arm.move_absolute(-600, 100);
+  // pros::delay(1000);
+  // catapult_arm.move_absolute(0, 400);
+  // pros::delay(1000);
+  // catapult_arm.move_absolute(-600, 100);
+  // pros::delay(1000);
+  // catapult_arm.move_absolute(0, 400);
+  catapultShoot();
+  matchloader.move_absolute(0, 200);
   pros::delay(250);
+
+  //Long goal reset
+  drive_for_inches(80, 2);
+  wall_reset_v2(8000, 200, -1);
+  drive_for_inches(80, 2);
+  wall_reset_v2(8000, 200, -1);
+
+  pros::delay(500);
+
+  //Park
+  discore.move_absolute(850, 200);
+  drive_for_inches(80, 9);
+  turn_right_deg(55, 40, 500);
+  
+  drive_for_inches(150, 30);
 }
 
 void twovtwoNormalAuton() {
@@ -1570,7 +1667,7 @@ void park() {
   pros::delay(7000);
 }
 // --- Autonomous ---
-void autonomous() { twoVtwo(); }
+void autonomous() { skillsV3(); }
 
 // // Forward fire
 // catapult_start(200, false);
