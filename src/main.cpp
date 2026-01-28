@@ -1076,7 +1076,7 @@ void twoVtwo() {
   pros::delay(500);
 
   // Gather matchload
-  drive_for_inches(50, 16);
+  drive_for_inches(50, 14);
   pros::delay(400);
   drive_backward_for_inches(80, .5); // Backward drive
   wall_reset_v2(4000);
@@ -1138,6 +1138,7 @@ void skillsV3() {
   catapultShootForAuto(200);
   pros::delay(500);
 
+  discore.move_absolute(850, 200);
   matchloader.move_absolute(1400, 200);
 
   // Long goal reset
@@ -1149,10 +1150,13 @@ void skillsV3() {
   // Long goal reset
   drive_for_inches(80, 3);
   wall_reset_v2(10000, 200, -1);
+  drive_for_inches(80, 3);
+  wall_reset_v2(10000, 200, -1);
   pros::delay(500);
 
   // Gather matchload
-  drive_for_inches(50, 14);
+  
+  drive_for_inches(50, 15);
   pros::delay(350);
   drive_backward_for_inches(80, .5); // Backward drive
   wall_reset_v2(4000);
@@ -1197,82 +1201,75 @@ void skillsV3() {
 }
 
 void twovtwoWithMatchload() {
-  // Move to lower center goal
-  matchloader.move_absolute(1400, 200);
-  drive_for_inches(80, 24.4);
-  pros::delay(500);
+  catapult_arm.tare_position();
+  matchloader.tare_position();
+  discore.tare_position();
 
-  left_motor_group.move_velocity(50);
-  right_motor_group.move_velocity(-50);
-  pros::delay(450);
-  left_motor_group.move_velocity(0);
-  right_motor_group.move_velocity(0);
+  // Go to matchload
+  matchloader.move_absolute(1400, 200); // Matchload down
+  discore.move_absolute(850, 200);      // Descore up
+  drive_for_inches(80, 24.5);             // Move forward
 
-  intake.move_velocity(-200);
-  discore.move_absolute(850, 200);
-  drive_for_inches(90, 8);
-  pros::delay(1100);
+  pros::delay(500); // Delay
 
-  drive_backward_for_inches(50, 13.8);
+  // Turn to matchload
+  turn_right_deg(120, 30, 500); // Turn right
 
-  discore.move_absolute(0, 200);
-  pros::delay(500);
-
-  // shoot
-  intake.move_velocity(0);
-  catapult_arm.move_absolute(-600, 200);
-  pros::delay(1500);
-  catapult_arm.move_absolute(0, 200);
-
-  discore.move_absolute(850, 70);
-  pros::delay(500);
-  intake.move_velocity(-200);
-
-  // Second matchload
-  drive_for_inches(50, 14);
-  discore.move_absolute(0, 200);
-  pros::delay(1200);
-
-  catapult_arm.move_absolute(-600, 200);
-  pros::delay(1000);
-  catapult_arm.move_absolute(0, 200);
-
-  // intake.move_velocity(200);
-  // pros::delay(500);
-  // intake.move_velocity(0);
-
-  discore.move_absolute(850, 200);
-  pros::delay(5000);
-
-  pros::delay(500);
-
-  drive_backward_for_inches(50, 13.5);
-
-  discore.move_absolute(0, 200);
-  pros::delay(500);
-
-  intake.move_velocity(0);
-  catapult_arm.move_absolute(-600, 70);
-  intake.move_velocity(-200);
-  pros::delay(1500);
-  catapult_arm.move_absolute(0, 200);
-  intake.move_velocity(0);
-
-  pros::delay(500);
-
-  left_motor_group.move_velocity(50);
-  pros::delay(500);
-  left_motor_group.move_velocity(0);
-
-  pros::delay(500);
-
+  // Long goal reset
   drive_for_inches(80, 3);
-
-  left_motor_group.move_velocity(-50);
+  wall_reset_v2(10000, 200, 1);
   pros::delay(500);
-  left_motor_group.move_velocity(0);
 
-  drive_backward_for_inches(40, 20);
+  // Gather matchload
+  intake.move_velocity(-200);           // Intake ball
+  pros::delay(400);
+  drive_backward_for_inches(80, .5); // Backward drive
+  wall_reset_v2(4000);  
+
+  // Drive back to long goal
+  drive_backward_for_inches(40, 10);
+  turn_left_deg(10, 50, 250);
+  wall_reset_v2(8000, 200, -1);
+  pros::delay(500);
+
+  // Shoot
+  discore.move_absolute(0, 200);
+  pros::delay(500);
+  catapultShootForAuto(100);
+  pros::delay(250);
+
+  // Long goal reset
+  drive_for_inches(80, 2);
+  wall_reset_v2(8000, 200, -1);
+
+  // Gather matchload
+  intake.move_velocity(-200);           // Intake ball
+  drive_for_inches(50, 16);
+  pros::delay(300);
+  drive_backward_for_inches(80, .5); // Backward drive
+  wall_reset_v2(4000, 0);
+
+  drive_backward_for_inches(80, 2);
+  turn_right_deg(30, 70, 500);
+  catapultShootForAuto(100);
+  pros::delay(500);
+  turn_left_deg(50, 70, 500);
+  drive_for_inches(80, 2);
+
+  wall_reset_v2(4000, 100, 1);
+  pros::delay(4000);
+
+  // Drive back to long goal
+  drive_backward_for_inches(40, 10);
+  turn_left_deg(10, 50, 250);
+  wall_reset_v2(8000, 200, -1);
+  pros::delay(500);
+
+  // Shoot
+  catapultShootForAuto(100);
+  matchloader.move_absolute(0, 200);
+  pros::delay(250);
+
 }
 
 void debug() {
@@ -1675,7 +1672,7 @@ void park() {
   pros::delay(7000);
 }
 // --- Autonomous ---
-void autonomous() { twoVtwo(); }
+void autonomous() { skillsV3(); }
 
 // // Forward fire
 // catapult_start(200, false);
