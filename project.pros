@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "conquesta_skills",
+    "project_name": "conquesta_2v2",
     "target": "v5",
     "templates": {
       "LemLib": {
@@ -635,9 +635,9 @@
       }
     },
     "upload_options": {
-      "slot": 2,
+      "slot": 1,
       "after": "none",
-      "icon": "pizza"
+      "icon": "power"
     },
     "use_early_access": false
   }

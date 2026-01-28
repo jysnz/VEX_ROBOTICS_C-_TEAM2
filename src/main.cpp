@@ -1672,7 +1672,7 @@ void park() {
   pros::delay(7000);
 }
 // --- Autonomous ---
-void autonomous() { skillsV3(); }
+void autonomous() { twoVtwo(); }
 
 // // Forward fire
 // catapult_start(200, false);
