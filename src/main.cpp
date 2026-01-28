@@ -1076,8 +1076,8 @@ void twoVtwo() {
   pros::delay(500);
 
   // Gather matchload
-  drive_for_inches(50, 14);
-  pros::delay(400);
+  ;wall_reset_v2(5000, 250);
+  pros::delay(500);
   drive_backward_for_inches(80, .5); // Backward drive
   wall_reset_v2(4000);
 
@@ -1116,6 +1116,7 @@ void twoVtwo() {
   drive_backward_for_inches(100, 6);
   discore.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
 }
+
 void skillsV3() {
   catapult_arm.tare_position();
   matchloader.tare_position();
