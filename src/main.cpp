@@ -1062,14 +1062,17 @@ void twoVtwo() {
   // Turn to matchload
   turn_right_deg(120, 30, 500); // Turn right
 
-  // Long goal reset
+  // Long goal reset and shoot
   wall_reset_v2(
       7000, 200,
       -1); // Wall reset Direction = -1 (Backward), Direction = 1 (Forward)
   pros::delay(500);
+  discore.move_absolute(0, 200);
+  catapultShootForAuto(100);
 
   // Long goal reset
   drive_for_inches(80, 3);
+  discore.move_absolute(850, 200);
   wall_reset_v2(10000, 200, -1);
   pros::delay(500);
 
@@ -1090,15 +1093,15 @@ void twoVtwo() {
   discore.move_absolute(0, 200);
   pros::delay(500);
   catapultShootForAuto(100);
-  pros::delay(250);
+  // pros::delay(250);
 
-  // Long goal reset
-  drive_for_inches(80, 2);
-  wall_reset_v2(8000, 200, -1);
-  drive_for_inches(80, 2);
-  wall_reset_v2(8000, 200, -1);
+  // // Long goal reset
+  // drive_for_inches(80, 2);
+  // wall_reset_v2(8000, 200, -1);
+  // drive_for_inches(80, 2);
+  // wall_reset_v2(8000, 200, -1);
 
-  pros::delay(500);
+  // pros::delay(500);
 
   // // Descore
   // drive_for_inches(50, 2);
