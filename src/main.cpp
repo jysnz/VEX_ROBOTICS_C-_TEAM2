@@ -1102,19 +1102,19 @@ void twoVtwo() {
 
   pros::delay(500);
 
-  // Descore
-  drive_for_inches(50, 2);
-  pros::delay(500);
-  turn_left_deg(57, 40, 500);
-  drive_backward_for_inches(50, 2.9);
-  pros::delay(250);
+  // // Descore
+  // drive_for_inches(50, 2);
+  // pros::delay(500);
+  // turn_left_deg(57, 40, 500);
+  // drive_backward_for_inches(50, 2.9);
+  // pros::delay(250);
 
-  right_motor_group.move_velocity(-50);
-  pros::delay(750);
-  right_motor_group.move_velocity(0);
+  // right_motor_group.move_velocity(-50);
+  // pros::delay(750);
+  // right_motor_group.move_velocity(0);
 
-  drive_backward_for_inches(100, 6);
-  discore.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+  // drive_backward_for_inches(100, 6);
+  // discore.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
 }
 
 void skillsV3() {
