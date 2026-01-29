@@ -1068,8 +1068,6 @@ void twoVtwo() {
       -1); // Wall reset Direction = -1 (Backward), Direction = 1 (Forward)
   pros::delay(500);
 
-  matchloader.move_absolute(1400, 200);
-
   // Long goal reset
   drive_for_inches(80, 3);
   wall_reset_v2(10000, 200, -1);
