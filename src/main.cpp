@@ -1074,22 +1074,22 @@ void twoVtwo() {
   pros::delay(500);
 
   // Gather matchload
-  ;wall_reset_v2(5000, 250);
+  drive_for_inches(40, 10);
+  wall_reset_v2(5000, 250);
   pros::delay(500);
   drive_backward_for_inches(80, .5); // Backward drive
   wall_reset_v2(4000);
 
   // Drive back to long goal
   drive_backward_for_inches(40, 10);
-  turn_left_deg(10, 50, 250);
   wall_reset_v2(8000, 200, -1);
   pros::delay(500);
+  matchloader.move_absolute(0, 200);
 
   // Shoot
   discore.move_absolute(0, 200);
   pros::delay(500);
   catapultShootForAuto(100);
-  matchloader.move_absolute(0, 200);
   pros::delay(250);
 
   // Long goal reset
