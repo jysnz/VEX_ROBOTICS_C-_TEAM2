@@ -1074,6 +1074,8 @@ void twoVtwo() {
   drive_for_inches(80, 3);
   discore.move_absolute(850, 200);
   wall_reset_v2(10000, 200, -1);
+  drive_for_inches(80, 3);
+  wall_reset_v2(10000, 200, -1);
   pros::delay(500);
 
   // Gather matchload
@@ -1157,7 +1159,7 @@ void skillsV3() {
   pros::delay(500);
 
   // Gather matchload
-  
+
   drive_for_inches(50, 15);
   pros::delay(350);
   drive_backward_for_inches(80, .5); // Backward drive
@@ -1210,7 +1212,7 @@ void twovtwoWithMatchload() {
   // Go to matchload
   matchloader.move_absolute(1400, 200); // Matchload down
   discore.move_absolute(850, 200);      // Descore up
-  drive_for_inches(80, 24.5);             // Move forward
+  drive_for_inches(80, 24.5);           // Move forward
 
   pros::delay(500); // Delay
 
@@ -1223,10 +1225,10 @@ void twovtwoWithMatchload() {
   pros::delay(500);
 
   // Gather matchload
-  intake.move_velocity(-200);           // Intake ball
+  intake.move_velocity(-200); // Intake ball
   pros::delay(400);
   drive_backward_for_inches(80, .5); // Backward drive
-  wall_reset_v2(4000);  
+  wall_reset_v2(4000);
 
   // Drive back to long goal
   drive_backward_for_inches(40, 10);
@@ -1245,7 +1247,7 @@ void twovtwoWithMatchload() {
   wall_reset_v2(8000, 200, -1);
 
   // Gather matchload
-  intake.move_velocity(-200);           // Intake ball
+  intake.move_velocity(-200); // Intake ball
   drive_for_inches(50, 16);
   pros::delay(300);
   drive_backward_for_inches(80, .5); // Backward drive
@@ -1271,7 +1273,6 @@ void twovtwoWithMatchload() {
   catapultShootForAuto(100);
   matchloader.move_absolute(0, 200);
   pros::delay(250);
-
 }
 
 void debug() {
