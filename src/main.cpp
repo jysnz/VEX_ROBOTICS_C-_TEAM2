@@ -1081,7 +1081,7 @@ void twoVtwo() {
   wall_reset_v2(5000, 250);
   pros::delay(500);
   drive_backward_for_inches(80, .5); // Backward drive
-  wall_reset_v2(4000);
+  wall_reset_v2(4000, 100);
 
   // Drive back to long goal
   drive_backward_for_inches(40, 10);
