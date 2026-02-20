@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
+
 bool drive_task_running = false;
 bool drive_backward_task_running = false;
 
@@ -57,16 +58,16 @@ float kI = 0.0;
 float kD = 0.5;
 
 // --- Motors ---
-pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-4, -3, -1}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
-pros::Motor intake(4, pros::MotorGears::green);
+pros::Motor intake(11, pros::MotorGears::green);
+pros::Motor intake2(12, pros::MotorGears::green);
 pros::Motor matchloader(5, pros::MotorGears::red);
-pros::Motor discore(12, pros::MotorGears::green);
+pros::Motor discore(20, pros::MotorGears::green);
 
 // Plug 'Ping' into port E, 'Echo' into port F (Change letters as needed)
-pros::adi::Ultrasonic ultrasonic('A', 'B');
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
@@ -113,6 +114,27 @@ double prevLeft = 0.0;
 double prevRight = 0.0;
 
 double sign(double x) { return (x > 0) - (x < 0); }
+
+void ultrasonicSense(){
+  pros::ADIUltrasonic ultrasonic('A', 'B');
+  while (true) {
+    std::cout << "Distance: " << ultrasonic.get_value();
+    pros::delay(10);
+  }
+}
+
+double get_distance_cm() {
+    pros::ADIUltrasonic ultrasonic('A', 'B');
+    int raw_value = ultrasonic.get_value();
+
+    // PROS returns -1 if the sensor is out of range or not plugged in
+    if (raw_value <= 0) {
+        return -1.0;
+    }
+
+    // Convert millimeters (PROS default) to centimeters
+    return (double)raw_value / 10.0;
+}
 
 void catapultTask(void *) {
   while (true) {
@@ -169,6 +191,109 @@ void catapultTask(void *) {
     pros::delay(CHECK_DELAY);
   }
 }
+
+void catapult_reset_smooth(int maxVoltage = 7000,
+                           int minVoltage = 1500,
+                           int rampStep = 200,
+                           int settleTime = 200,
+                           int timeout = 2000) {
+  int stalledTime = 0;
+  int elapsed = 0;
+  int currentVoltage = minVoltage;
+
+  // Initial gentle start
+  catapult_arm.move_voltage(currentVoltage);
+
+  while (stalledTime < settleTime && elapsed < timeout) {
+
+    // Smooth ramp up
+    currentVoltage += rampStep;
+    if (currentVoltage > maxVoltage)
+      currentVoltage = maxVoltage;
+
+    catapult_arm.move_voltage(currentVoltage);
+
+    double vel = std::abs(catapult_arm.get_actual_velocity());
+
+    // Stall detect
+    if (vel < 3) {
+      stalledTime += 10;
+    } else {
+      stalledTime = 0;
+    }
+
+    pros::delay(10);
+    elapsed += 10;
+  }
+
+  // Smooth ramp down
+  while (currentVoltage > 0) {
+    currentVoltage -= 300;
+    if (currentVoltage < 0)
+      currentVoltage = 0;
+
+    catapult_arm.move_voltage(currentVoltage);
+    pros::delay(10);
+  }
+
+  catapult_arm.move_voltage(0);
+  pros::delay(50);
+
+  // Define this as home
+  catapult_arm.tare_position();
+}
+
+void discore_reset_smooth(int maxVoltage = 7000,
+                           int minVoltage = 1500,
+                           int rampStep = 200,
+                           int settleTime = 200,
+                           int timeout = 2000) {
+  int stalledTime = 0;
+  int elapsed = 0;
+  int currentVoltage = minVoltage;
+
+  // Initial gentle start
+  discore.move_voltage(-currentVoltage);
+
+  while (stalledTime < settleTime && elapsed < timeout) {
+
+    // Smooth ramp up
+    currentVoltage += rampStep;
+    if (currentVoltage > maxVoltage)
+      currentVoltage = maxVoltage;
+
+    discore.move_voltage(-currentVoltage);
+
+    double vel = std::abs(catapult_arm.get_actual_velocity());
+
+    // Stall detect
+    if (vel < 3) {
+      stalledTime += 10;
+    } else {
+      stalledTime = 0;
+    }
+
+    pros::delay(10);
+    elapsed += 10;
+  }
+
+  // Smooth ramp down
+  while (currentVoltage > 0) {
+    currentVoltage -= 300;
+    if (currentVoltage < 0)
+      currentVoltage = 0;
+
+    discore.move_voltage(-currentVoltage);
+    pros::delay(10);
+  }
+
+  discore.move_voltage(0);
+  pros::delay(50);
+
+  // Define this as home
+  discore.tare_position();
+}
+
 
 void startCatapultShoot() {
   if (catState != CAT_IDLE)
@@ -887,6 +1012,8 @@ void catapultControl() {
   const int MAX_SPEED = 127;
   static bool controlsReversed = false;
   while (true) {
+    left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
     // pros::lcd::print(0, "X: %f", robot_x);
     pros::lcd::print(1, "Y: %f", robot_y);
     // pros::lcd::print(2, "Theta: %f", robot_theta * (180/M_PI)); // Convert to
@@ -933,18 +1060,22 @@ void catapultControl() {
 
     if (matchLoadUp && !matchLoadDown) {
       matchloader.move_absolute(0, 100);
-      discore.move_absolute(800, 200);
     } else if (matchLoadDown && !matchLoadUp) {
-      matchloader.move_absolute(1400, 100);
-      discore.move_absolute(0, 200);
+      matchloader.move_absolute(-600, 100);
     }
 
-    if (intakeForward && !intakeReverse)
+    if (intakeForward){
       intake.move_velocity(200);
-    else if (intakeReverse && !intakeForward)
+      intake2.move_velocity(-200);
+    }
+    else if (intakeReverse){
       intake.move_velocity(-200);
-    if (intakePause)
+      intake2.move_velocity(200);
+    }
+    else{
       intake.move_velocity(0);
+      intake2.move_velocity(0);
+    }
 
     pros::delay(20);
   }
@@ -952,15 +1083,9 @@ void catapultControl() {
 
 // --- Initialize ---
 void initialize() {
-  pros::Task catapult_control(catapultTask, nullptr, "Catapult Task");
-  catapult_arm.tare_position();
-  matchloader.tare_position();
-  discore.tare_position();
   pros::lcd::initialize();
   chassis.calibrate();
-
   matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
   static pros::Task screen_task([]() {
     const int P_X = 240;
@@ -1044,7 +1169,9 @@ void initialize() {
 }
 
 // --- Operator Control ---
-void opcontrol() { catapultControl(); }
+void opcontrol() { 
+  catapultControl();
+}
 
 void twoVtwo() {
   catapult_arm.tare_position();
