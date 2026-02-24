@@ -61,9 +61,10 @@ float kD = 0.5;
 pros::MotorGroup left_motor_group({-4, -3, -1}, pros::MotorGears::green);
 pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
 
-pros::Motor catapult_arm(7, pros::MotorGears::red);
+pros::Motor catapult_arm(13, pros::MotorGears::red);
 pros::Motor intake(11, pros::MotorGears::green);
 pros::Motor intake2(12, pros::MotorGears::green);
+pros::Motor intake3(7, pros::MotorGears::green);
 pros::Motor matchloader(5, pros::MotorGears::red);
 pros::Motor discore(20, pros::MotorGears::green);
 
@@ -1067,14 +1068,17 @@ void catapultControl() {
     if (intakeForward){
       intake.move_velocity(200);
       intake2.move_velocity(-200);
+      intake3.move_velocity(-200);
     }
     else if (intakeReverse){
       intake.move_velocity(-200);
       intake2.move_velocity(200);
+      intake3.move_velocity(200);
     }
     else{
       intake.move_velocity(0);
       intake2.move_velocity(0);
+      intake3.move_velocity(0);
     }
 
     pros::delay(20);
