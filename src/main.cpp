@@ -57,13 +57,13 @@ float kI = 0.0;
 float kD = 0.5;
 
 // --- Motors ---
-pros::MotorGroup left_motor_group({-4, -7, -6}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({1, 2, 3}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-1, -2, -3, -4}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({11, 12, 13, 14}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
-pros::Motor intake(4, pros::MotorGears::green);
+pros::Motor intake(19, pros::MotorGears::green);
 pros::Motor matchloader(5, pros::MotorGears::red);
-pros::Motor discore(12, pros::MotorGears::green);
+pros::Motor discore(15, pros::MotorGears::green);
 
 // Plug 'Ping' into port E, 'Echo' into port F (Change letters as needed)
 pros::adi::Ultrasonic ultrasonic('A', 'B');
