@@ -57,8 +57,8 @@ float kI = 0.0;
 float kD = 0.5;
 
 // --- Motors ---
-pros::MotorGroup left_motor_group({-2, -3, -1}, pros::MotorGears::green);
-pros::MotorGroup right_motor_group({10, 8, 9}, pros::MotorGears::green);
+pros::MotorGroup left_motor_group({-4, -7, -6}, pros::MotorGears::green);
+pros::MotorGroup right_motor_group({1, 2, 3}, pros::MotorGears::green);
 
 pros::Motor catapult_arm(7, pros::MotorGears::red);
 pros::Motor intake(4, pros::MotorGears::green);
@@ -888,7 +888,7 @@ void catapultControl() {
   static bool controlsReversed = false;
   while (true) {
     // pros::lcd::print(0, "X: %f", robot_x);
-    pros::lcd::print(1, "Y: %f", robot_y);
+    // pros::lcd::print(1, "Y: %f", robot_y);
     // pros::lcd::print(2, "Theta: %f", robot_theta * (180/M_PI)); // Convert to
     // degrees
     pros::delay(20);
@@ -958,6 +958,8 @@ void initialize() {
   discore.tare_position();
   pros::lcd::initialize();
   chassis.calibrate();
+  left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
   matchloader.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   catapult_arm.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
