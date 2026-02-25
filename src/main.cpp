@@ -1676,8 +1676,16 @@ void park() {
   matchloader.move_absolute(0, 100);
   pros::delay(7000);
 }
+
+void test1(){
+  left_motor_group.move_velocity(200);
+  right_motor_group.move_velocity(200);
+  pros::delay(500);
+  left_motor_group.move_velocity(0);
+  right_motor_group.move_velocity(0);
+}
 // --- Autonomous ---
-void autonomous() { twoVtwo(); }
+void autonomous() { test1(); }
 
 // // Forward fire
 // catapult_start(200, false);
